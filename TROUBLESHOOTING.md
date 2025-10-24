@@ -132,8 +132,130 @@ export PATH="$PATH:$HOME/.local/bin"
 echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
 ```
 
+## Profile Issues
+
+### "profile not found"
+
+The specified profile doesn't exist.
+
+**Solution:**
+```bash
+# List all profiles
+clauderock profiles
+
+# Create a new profile
+clauderock config save my-profile
+
+# Or switch to an existing profile
+cloudrock config switch default
+```
+
+### Migration didn't work
+
+Old `config.json` wasn't migrated to profiles.
+
+**Solution:**
+```bash
+# Manually save your config as a profile
+clauderock config save default
+
+# Verify it was created
+ls ~/.cloudrock/profiles/
+```
+
+### Can't delete current profile
+
+You cannot delete the currently active profile.
+
+**Solution:**
+```bash
+# Switch to a different profile first
+clauderock config switch another-profile
+
+# Then delete
+clauderock config delete old-profile
+```
+
+## Stats & Database Issues
+
+### "database is locked"
+
+The SQLite database is locked by another process.
+
+**Solution:**
+1. Close any other clauderock processes
+2. If stuck, restart your terminal
+3. Last resort: `rm ~/.clauderock/usage.db` (will lose stats)
+
+### Cache hit rate shows >100%
+
+This was a bug in earlier versions that has been fixed.
+
+**Solution:**
+```bash
+# Reset stats to clear incorrect data
+clauderock stats reset
+
+# New sessions will be tracked correctly
+```
+
+### Stats not showing recent sessions
+
+Session JSONL file might not have been found or parsed.
+
+**Solution:**
+```bash
+# Check if JSONL files exist
+ls ~/.claude/projects/*/*.jsonl
+
+# Verify working directory encoding is correct
+# The directory path gets encoded with dashes replacing slashes
+```
+
+### Reset all stats
+
+Delete all usage statistics from the database.
+
+**Solution:**
+```bash
+# With confirmation dialog
+clauderock stats reset
+
+# Skip confirmation (dangerous!)
+clauderock stats reset --force
+```
+
+## Session Tracking Issues
+
+### "no JSONL files found"
+
+Claude Code didn't create a session file, or it's in an unexpected location.
+
+**Causes:**
+- Session was too short
+- Claude Code didn't start properly
+- Working directory path encoding mismatch
+
+**Solution:**
+- Sessions are only tracked if Claude Code actually runs
+- Very short sessions (< 1 second) may not generate JSONL files
+
+### TPM/RPM metrics are zero
+
+No API requests were made during the session.
+
+**Causes:**
+- Session ended before any requests
+- Claude Code didn't connect to Bedrock
+
+**Solution:**
+- This is normal for very short sessions
+- Only sessions with actual API calls will have TPM/RPM data
+
 ## Still Having Issues?
 
 1. Check your configuration: `clauderock config list`
-2. Verify AWS access: `aws bedrock list-inference-profiles --profile YOUR_PROFILE`
-3. Open an issue: https://github.com/OlaHulleberg/clauderock/issues
+2. Check your current profile: `clauderock profiles`
+3. Verify AWS access: `aws bedrock list-inference-profiles --profile YOUR_PROFILE`
+4. Check stats database: `ls -lh ~/.clauderock/usage.db`
+5. Open an issue: https://github.com/OlaHulleberg/clauderock/issues

@@ -1,6 +1,59 @@
 # Configuration Guide
 
-`clauderock` stores configuration in `~/.clauderock/config.json`.
+`clauderock` stores configuration in profiles at `~/.clauderock/profiles/`.
+
+## Profile Management
+
+Profiles allow you to save and switch between multiple configurations for different use cases (work, personal, different projects).
+
+### List Profiles
+
+```bash
+clauderock profiles
+```
+
+Shows all saved profiles and indicates which one is currently active.
+
+### Create/Save Profile
+
+```bash
+# Save current configuration as a new profile
+clauderock config save my-profile
+```
+
+### Switch Profile
+
+```bash
+# Switch to a different profile
+clauderock config switch my-profile
+```
+
+The switched profile becomes the active profile for all future runs.
+
+### Delete Profile
+
+```bash
+# Delete a profile
+clauderock config delete my-profile
+```
+
+### Rename Profile
+
+```bash
+# Rename a profile
+clauderock config rename old-name new-name
+```
+
+### Copy Profile
+
+```bash
+# Copy a profile to create a template
+clauderock config copy template new-project
+```
+
+### Migration from Old Config
+
+If you have an old `~/.clauderock/config.json`, it will automatically be migrated to `~/.clauderock/profiles/default.json` on first run. The old file is backed up as `config.json.bak`.
 
 ## Interactive Configuration (Recommended)
 
@@ -25,7 +78,9 @@ Features:
 
 ## Configuration File
 
-On first run, a default configuration is created:
+Each profile is stored as a separate JSON file in `~/.clauderock/profiles/`.
+
+On first run, a default profile is created at `~/.clauderock/profiles/default.json`:
 
 ```json
 {
@@ -36,6 +91,8 @@ On first run, a default configuration is created:
   "fast-model": "anthropic.claude-haiku-4-5"
 }
 ```
+
+The current active profile is tracked in `~/.clauderock/current-profile.txt`.
 
 ## Configuration Keys
 
@@ -77,6 +134,8 @@ Fast model identifier for quick operations (used by Claude Code for certain task
 
 ## Managing Configuration
 
+All configuration commands operate on the **current active profile**.
+
 ### Set a value
 
 ```bash
@@ -112,6 +171,8 @@ clauderock config list
 
 Output:
 ```
+Current Profile: work-dev
+
 Configuration:
   profile:      my-aws-profile
   region:       us-east-1

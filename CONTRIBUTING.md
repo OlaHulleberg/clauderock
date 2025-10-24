@@ -22,15 +22,26 @@ go build -o clauderock
 
 ```
 clauderock/
-├── cmd/              # CLI commands (Cobra)
+├── cmd/                 # CLI commands (Cobra)
+│   ├── root.go          # Main command with override flags
+│   ├── config.go        # Configuration commands
+│   ├── profiles.go      # Profile management
+│   ├── models.go        # Model listing
+│   ├── stats.go         # Usage statistics
+│   └── stats_reset.go   # Reset stats
 ├── internal/
-│   ├── aws/          # AWS Bedrock integration
-│   ├── config/       # Configuration management
-│   ├── launcher/     # Claude Code launcher
-│   └── updater/      # Auto-update system
-├── main.go           # Entry point
-├── install.sh        # Installation script
-└── .goreleaser.yml   # Release configuration
+│   ├── aws/             # AWS Bedrock integration
+│   ├── config/          # Configuration structs
+│   ├── profiles/        # Profile manager
+│   ├── interactive/     # Bubbletea UI components
+│   ├── launcher/        # Claude Code launcher
+│   ├── monitoring/      # JSONL parser for session tracking
+│   ├── usage/           # SQLite usage tracking
+│   ├── pricing/         # Cost calculation
+│   └── updater/         # Auto-update system
+├── main.go              # Entry point
+├── install.sh           # Installation script
+└── .goreleaser.yml      # Release configuration
 ```
 
 ## Running Tests
