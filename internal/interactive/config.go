@@ -10,11 +10,28 @@ import (
 )
 
 // RunInteractiveConfig runs an interactive configuration wizard
-func RunInteractiveConfig(currentVersion string) error {
+func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
+	// Type assert the manager (we'll accept any interface to avoid circular dependencies)
+	type ConfigManager interface {
+		GetCurrentConfig(version string) (*config.Config, error)
+		GetCurrent() (string, error)
+		Save(name string, cfg *config.Config) error
+	}
+
+	manager, ok := mgr.(ConfigManager)
+	if !ok {
+		return fmt.Errorf("invalid manager type")
+	}
+
 	// Load existing config (or defaults)
-	cfg, err := config.Load(currentVersion)
+	cfg, err := manager.GetCurrentConfig(currentVersion)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	currentProfile, err := manager.GetCurrent()
+	if err != nil {
+		return fmt.Errorf("failed to get current profile: %w", err)
 	}
 
 	// Variables to hold user selections
@@ -140,12 +157,12 @@ func RunInteractiveConfig(currentVersion string) error {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Save configuration
-	if err := cfg.Save(); err != nil {
+	// Save configuration to current profile
+	if err := manager.Save(currentProfile, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println("\n✓ Configuration saved successfully!")
+	fmt.Printf("\n✓ Configuration saved successfully to profile '%s'!\n", currentProfile)
 	fmt.Printf("\nConfiguration:\n")
 	fmt.Printf("  Profile:      %s\n", cfg.Profile)
 	fmt.Printf("  Region:       %s\n", cfg.Region)
