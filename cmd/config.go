@@ -4,12 +4,21 @@ import (
 	"fmt"
 
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"github.com/OlaHulleberg/clauderock/internal/interactive"
 	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage clauderock configuration",
+	Long: `Manage clauderock configuration.
+
+When run without subcommands, starts an interactive configuration wizard.
+You can also use subcommands to set, get, or list configuration values.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// If no subcommand specified, run interactive config
+		return interactive.RunInteractiveConfig(Version)
+	},
 }
 
 var configSetCmd = &cobra.Command{
@@ -25,7 +34,7 @@ var configSetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
 
-		cfg, err := config.Load()
+		cfg, err := config.Load(Version)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -50,7 +59,7 @@ var configGetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 
-		cfg, err := config.Load()
+		cfg, err := config.Load(Version)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -69,7 +78,7 @@ var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all configuration values",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := config.Load(Version)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

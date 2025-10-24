@@ -2,6 +2,27 @@
 
 `clauderock` stores configuration in `~/.clauderock/config.json`.
 
+## Interactive Configuration (Recommended)
+
+Run the interactive configuration wizard to set up all your settings:
+
+```bash
+clauderock config
+```
+
+The wizard will guide you through:
+1. **AWS Profile Selection** - Choose from your available AWS profiles
+2. **Region Selection** - Select the AWS region with real-time filtering
+3. **Cross-Region Selection** - Choose between US, EU, or Global routing
+4. **Model Selection** - Browse and filter available models from all providers
+5. **Fast Model Selection** - Choose a fast model for quick operations
+
+Features:
+- Real-time search filtering for easy navigation
+- Automatically fetches available models from AWS Bedrock
+- Supports multiple AI providers (Anthropic, Meta, Amazon, AI21, Cohere, Mistral, etc.)
+- Shows friendly model names with provider information
+
 ## Configuration File
 
 On first run, a default configuration is created:
@@ -11,8 +32,8 @@ On first run, a default configuration is created:
   "profile": "default",
   "region": "us-east-1",
   "cross-region": "global",
-  "model": "claude-sonnet-4-5",
-  "fast-model": "claude-haiku-4-5"
+  "model": "anthropic.claude-sonnet-4-5",
+  "fast-model": "anthropic.claude-haiku-4-5"
 }
 ```
 
@@ -37,16 +58,22 @@ Cross-region inference profile geography. Determines which AWS regions your requ
 - `"global"` - Routes across all available regions
 
 ### `model`
-Main model identifier prefix. Used to match against available inference profiles.
+Main model identifier in the format `provider.model-name`.
 
-**Example:** `"claude-sonnet-4-5"`, `"claude-opus-4"`
+**Examples:**
+- `"anthropic.claude-sonnet-4-5"` - Anthropic's Claude Sonnet
+- `"anthropic.claude-opus-4"` - Anthropic's Claude Opus
+- `"meta.llama-3-2-90b"` - Meta's Llama model
+- `"amazon.titan-text-premier"` - Amazon's Titan model
 
-**Note:** This is matched against profile IDs like `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+**Note:** The interactive config automatically formats models correctly. This is matched against profile IDs like `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
 
 ### `fast-model`
-Fast model identifier for quick operations (used by Claude Code for certain tasks).
+Fast model identifier for quick operations (used by Claude Code for certain tasks). Uses the same `provider.model-name` format.
 
-**Example:** `"claude-haiku-4-5"`, `"claude-haiku-3-5"`
+**Examples:**
+- `"anthropic.claude-haiku-4-5"` - Fast Anthropic model
+- `"anthropic.claude-haiku-3-5"` - Previous fast model
 
 ## Managing Configuration
 
@@ -61,8 +88,8 @@ Examples:
 clauderock config set profile my-aws-profile
 clauderock config set region us-east-1
 clauderock config set cross-region global
-clauderock config set model claude-sonnet-4-5
-clauderock config set fast-model claude-haiku-4-5
+clauderock config set model anthropic.claude-sonnet-4-5
+clauderock config set fast-model anthropic.claude-haiku-4-5
 ```
 
 ### Get a value
@@ -89,20 +116,30 @@ Configuration:
   profile:      my-aws-profile
   region:       us-east-1
   cross-region: global
-  model:        claude-sonnet-4-5
-  fast-model:   claude-haiku-4-5
+  model:        anthropic.claude-sonnet-4-5
+  fast-model:   anthropic.claude-haiku-4-5
 ```
 
 ## Supported Models
 
-The tool dynamically discovers available models from AWS Bedrock. Common model prefixes include:
+The tool dynamically discovers available models from AWS Bedrock across multiple providers:
 
-- `claude-sonnet-4-5` - Latest Sonnet model
-- `claude-opus-4` - Opus model
-- `claude-haiku-4-5` - Fast Haiku model
-- `claude-sonnet-3-5` - Previous Sonnet version
+**Anthropic Models:**
+- `anthropic.claude-sonnet-4-5` - Latest Sonnet model
+- `anthropic.claude-opus-4` - Opus model
+- `anthropic.claude-haiku-4-5` - Fast Haiku model
 
-**Note:** Availability depends on your AWS region and Bedrock access.
+**Meta Models:**
+- `meta.llama-3-2-90b` - Llama 3.2 90B
+- `meta.llama-3-2-11b` - Llama 3.2 11B
+
+**Amazon Models:**
+- `amazon.titan-text-premier` - Titan Text Premier
+
+**Other Providers:**
+- AI21, Cohere, Mistral models (check AWS Bedrock console for availability)
+
+**Note:** Availability depends on your AWS region, cross-region setting, and Bedrock access. Use the interactive config to see all available models for your setup.
 
 ## How Cross-Region Inference Works
 
@@ -110,13 +147,14 @@ When you run `clauderock`:
 
 1. Connects to AWS Bedrock in your configured `region`
 2. Lists all cross-region (SYSTEM_DEFINED) inference profiles
-3. Filters for profiles matching: `{cross-region}.anthropic.{model}*`
+3. Filters for profiles matching: `{cross-region}.{provider}.{model}*`
 4. Uses the matched profile ID to launch Claude Code
 
 **Example profile IDs:**
 - `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0`
-- `eu.anthropic.claude-opus-4-20250514-v1:0`
+- `eu.meta.llama-3-2-90b-20251001-v1:0`
+- `global.amazon.titan-text-premier-20250514-v1:0`
 
 ## Environment Variables Set
 

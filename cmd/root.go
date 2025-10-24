@@ -38,7 +38,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	go updater.CheckForUpdates(Version)
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.Load(Version)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

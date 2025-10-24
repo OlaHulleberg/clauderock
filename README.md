@@ -15,7 +15,10 @@ curl -fsSL https://raw.githubusercontent.com/OlaHulleberg/clauderock/main/instal
 ## Quick Start
 
 ```bash
-# Configure your AWS settings
+# Interactive configuration (recommended)
+clauderock config
+
+# Or configure manually
 clauderock config set profile my-aws-profile
 clauderock config set region us-east-1
 clauderock config set cross-region global
@@ -33,8 +36,8 @@ Five simple settings stored in `~/.clauderock/config.json`:
 | `profile` | AWS profile name | `production` |
 | `region` | AWS region | `us-east-1` |
 | `cross-region` | Geography for routing | `us`, `eu`, `global` |
-| `model` | Main model | `claude-sonnet-4-5` |
-| `fast-model` | Fast model | `claude-haiku-4-5` |
+| `model` | Main model | `anthropic.claude-sonnet-4-5` |
+| `fast-model` | Fast model | `anthropic.claude-haiku-4-5` |
 
 ```bash
 clauderock config set <key> <value>  # Set a value
@@ -45,6 +48,7 @@ clauderock config list               # View all settings
 
 ```bash
 clauderock                    # Launch with configured settings
+clauderock config             # Interactive configuration wizard
 clauderock --profile staging  # Override AWS profile
 clauderock update             # Update to latest version
 clauderock version            # Show version
