@@ -91,6 +91,104 @@ func formatAvailableProfiles(profiles []types.InferenceProfileSummary) string {
 	return builder.String()
 }
 
+// IsFullProfileID checks if a string is a full profile ID
+// Input: "global.anthropic.claude-sonnet-4-5-20250929-v1:0" → true
+// Input: "anthropic.claude-sonnet-4-5" → false
+func IsFullProfileID(id string) bool {
+	parts := strings.SplitN(id, ".", 2)
+	if len(parts) < 2 {
+		return false
+	}
+	crossRegions := map[string]bool{"us": true, "eu": true, "global": true}
+	return crossRegions[parts[0]]
+}
+
+// ExtractFriendlyModelName extracts friendly model name from full profile ID
+// Input: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+// Output: "anthropic.claude-sonnet-4-5"
+func ExtractFriendlyModelName(profileID string) string {
+	// If it's not a full profile ID, return as-is
+	if !IsFullProfileID(profileID) {
+		return profileID
+	}
+
+	// Remove cross-region prefix (us., eu., global.)
+	parts := strings.SplitN(profileID, ".", 2)
+	if len(parts) != 2 {
+		return profileID
+	}
+
+	remaining := parts[1]
+
+	// Split provider from rest
+	firstDotIndex := strings.Index(remaining, ".")
+	if firstDotIndex == -1 {
+		return remaining
+	}
+
+	provider := remaining[:firstDotIndex]
+	modelWithVersion := remaining[firstDotIndex+1:]
+
+	// Extract model name without version (remove date pattern and version)
+	modelParts := strings.Split(modelWithVersion, "-")
+	var cleanParts []string
+	for _, part := range modelParts {
+		// Stop if we hit a date pattern (8 digits) or version pattern
+		if len(part) == 8 || strings.HasPrefix(part, "v") || strings.Contains(part, ":") {
+			break
+		}
+		cleanParts = append(cleanParts, part)
+	}
+
+	if len(cleanParts) > 0 {
+		modelName := strings.Join(cleanParts, "-")
+		return fmt.Sprintf("%s.%s", provider, modelName)
+	}
+
+	return profileID
+}
+
+// ResolveModelToProfileID resolves a friendly model name to a full profile ID
+// Input: "anthropic.claude-sonnet-4-5" with profile, region, crossRegion
+// Output: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+func ResolveModelToProfileID(awsProfile, region, crossRegion, model string) (string, error) {
+	// If model already looks like a full profile ID, return it
+	if IsFullProfileID(model) {
+		return model, nil
+	}
+
+	ctx := context.Background()
+
+	// Load AWS config
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithSharedConfigProfile(awsProfile),
+		awsconfig.WithRegion(region),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create Bedrock client
+	client := bedrock.NewFromConfig(awsCfg)
+
+	// List cross-region inference profiles
+	result, err := client.ListInferenceProfiles(ctx, &bedrock.ListInferenceProfilesInput{
+		TypeEquals: types.InferenceProfileTypeSystemDefined,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to list inference profiles: %w", err)
+	}
+
+	// Find matching profile
+	profileID, err := findMatchingProfile(result.InferenceProfileSummaries, crossRegion, model)
+	if err != nil {
+		return "", fmt.Errorf("%w\nAvailable profiles:\n%s",
+			err, formatAvailableProfiles(result.InferenceProfileSummaries))
+	}
+
+	return profileID, nil
+}
+
 // GetAvailableModels fetches available models from Bedrock for a given profile, region, and cross-region
 // Returns a deduplicated list of model names in format "provider.model-name" (e.g., "anthropic.claude-sonnet-4-5", "meta.llama3-70b")
 func GetAvailableModels(profile, region, crossRegion string) ([]string, error) {
@@ -181,6 +279,48 @@ func GetAvailableModels(profile, region, crossRegion string) ([]string, error) {
 	}
 
 	return models, nil
+}
+
+// ValidateProfileIDs validates that the given profile IDs exist in AWS Bedrock
+func ValidateProfileIDs(awsProfile, region string, profileIDs ...string) error {
+	ctx := context.Background()
+
+	// Load AWS config
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithSharedConfigProfile(awsProfile),
+		awsconfig.WithRegion(region),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create Bedrock client
+	client := bedrock.NewFromConfig(awsCfg)
+
+	// List all inference profiles
+	result, err := client.ListInferenceProfiles(ctx, &bedrock.ListInferenceProfilesInput{
+		TypeEquals: types.InferenceProfileTypeSystemDefined,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list inference profiles: %w", err)
+	}
+
+	// Build a set of valid profile IDs
+	validProfiles := make(map[string]bool)
+	for _, profile := range result.InferenceProfileSummaries {
+		if profile.InferenceProfileId != nil {
+			validProfiles[aws.ToString(profile.InferenceProfileId)] = true
+		}
+	}
+
+	// Validate each requested profile ID
+	for _, profileID := range profileIDs {
+		if !validProfiles[profileID] {
+			return fmt.Errorf("profile ID '%s' does not exist in AWS Bedrock\nRun 'clauderock manage models list' to see available models", profileID)
+		}
+	}
+
+	return nil
 }
 
 // GetAvailableModelsDetailed fetches available models from Bedrock with detailed information

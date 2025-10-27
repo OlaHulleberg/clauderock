@@ -92,10 +92,16 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		hasOverrides = true
 	}
 	if clauderockModelFlag != "" {
+		if !aws.IsFullProfileID(clauderockModelFlag) {
+			return fmt.Errorf("--clauderock-model must be a full profile ID (e.g., 'global.anthropic.claude-sonnet-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
+		}
 		cfg.Model = clauderockModelFlag
 		hasOverrides = true
 	}
 	if clauderockFastModelFlag != "" {
+		if !aws.IsFullProfileID(clauderockFastModelFlag) {
+			return fmt.Errorf("--clauderock-fast-model must be a full profile ID (e.g., 'global.anthropic.claude-haiku-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
+		}
 		cfg.FastModel = clauderockFastModelFlag
 		hasOverrides = true
 	}
@@ -126,10 +132,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	// Find inference profile IDs
-	mainModelID, fastModelID, err := aws.FindInferenceProfiles(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to find inference profiles: %w", err)
+	// Use stored inference profile IDs directly (no AWS query needed!)
+	mainModelID := cfg.Model
+	fastModelID := cfg.FastModel
+
+	// Validate that we have full profile IDs (migration should have handled this)
+	if mainModelID == "" || fastModelID == "" {
+		return fmt.Errorf("model configuration is incomplete, please run: clauderock manage config")
 	}
 
 	fmt.Printf("Using model: %s\n", mainModelID)

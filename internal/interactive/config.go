@@ -149,8 +149,20 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 	cfg.Profile = selectedProfile
 	cfg.Region = selectedRegion
 	cfg.CrossRegion = selectedCrossRegion
-	cfg.Model = selectedModel
-	cfg.FastModel = selectedFastModel
+
+	// Resolve friendly model names to full profile IDs
+	fmt.Println("\nResolving model profile IDs...")
+	mainModelID, err := aws.ResolveModelToProfileID(selectedProfile, selectedRegion, selectedCrossRegion, selectedModel)
+	if err != nil {
+		return fmt.Errorf("failed to resolve main model: %w", err)
+	}
+	cfg.Model = mainModelID
+
+	fastModelID, err := aws.ResolveModelToProfileID(selectedProfile, selectedRegion, selectedCrossRegion, selectedFastModel)
+	if err != nil {
+		return fmt.Errorf("failed to resolve fast model: %w", err)
+	}
+	cfg.FastModel = fastModelID
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {

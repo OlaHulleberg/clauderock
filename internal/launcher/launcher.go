@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
 	"github.com/OlaHulleberg/clauderock/internal/usage"
 )
@@ -37,27 +38,83 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 		fmt.Sprintf("AWS_REGION=%s", cfg.Region),
 	)
 
-	// Execute claude with passthrough args and wait for it to complete
+	// Execute claude with passthrough args
 	cmd := exec.Command(claudePath, args...)
 	cmd.Env = env
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Run and wait for Claude Code to exit
-	cmdErr := cmd.Run()
-	exitCode := 0
-	if cmdErr != nil {
-		if exitError, ok := cmdErr.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
-		} else {
-			return fmt.Errorf("failed to execute claude: %w", cmdErr)
-		}
+	// Start Claude Code (non-blocking)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start claude: %w", err)
 	}
 
-	// Track session end
-	sessionEnd := time.Now()
+	// Validate model profile IDs in background
+	validationDone := make(chan error, 1)
+	go func() {
+		validationDone <- aws.ValidateProfileIDs(cfg.Profile, cfg.Region, mainModelID, fastModelID)
+	}()
 
+	// Wait for either validation to complete or Claude Code to exit
+	cmdDone := make(chan error, 1)
+	go func() {
+		cmdDone <- cmd.Wait()
+	}()
+
+	// Check validation result
+	select {
+	case validationErr := <-validationDone:
+		if validationErr != nil {
+			// Validation failed - kill Claude Code and return error
+			cmd.Process.Kill()
+			// Wait for process to be killed
+			<-cmdDone
+			return fmt.Errorf("invalid model configuration: %w", validationErr)
+		}
+		// Validation succeeded - wait for Claude Code to complete normally
+		cmdErr := <-cmdDone
+		exitCode := 0
+		if cmdErr != nil {
+			if exitError, ok := cmdErr.(*exec.ExitError); ok {
+				exitCode = exitError.ExitCode()
+			} else {
+				return fmt.Errorf("claude exited with error: %w", cmdErr)
+			}
+		}
+
+		// Track session end and return
+		sessionEnd := time.Now()
+		trackSession(cfg, mainModelID, fastModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
+
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return nil
+
+	case cmdErr := <-cmdDone:
+		// Claude Code exited before validation completed
+		exitCode := 0
+		if cmdErr != nil {
+			if exitError, ok := cmdErr.(*exec.ExitError); ok {
+				exitCode = exitError.ExitCode()
+			} else {
+				return fmt.Errorf("claude exited with error: %w", cmdErr)
+			}
+		}
+
+		// Track session end and return
+		sessionEnd := time.Now()
+		trackSession(cfg, mainModelID, fastModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
+
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return nil
+	}
+}
+
+func trackSession(cfg *config.Config, mainModelID, fastModelID, profileName, cwd string, sessionStart, sessionEnd time.Time, exitCode int) {
 	// Track usage after Claude Code exits
 	tracker, err := usage.NewTracker()
 	if err == nil {
@@ -81,11 +138,4 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 			fmt.Printf("Warning: failed to track session: %v\n", trackErr)
 		}
 	}
-
-	// Return the exit code from Claude Code
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-
-	return nil
 }

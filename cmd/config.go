@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/interactive"
 	"github.com/OlaHulleberg/clauderock/internal/profiles"
 	"github.com/spf13/cobra"
@@ -46,6 +47,17 @@ var configSetCmd = &cobra.Command{
 		cfg, err := mgr.GetCurrentConfig(Version)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		// Special handling for model and fast-model: resolve to full profile ID
+		if key == "model" || key == "fast-model" {
+			fmt.Println("Validating model and resolving profile ID...")
+			fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, value)
+			if err != nil {
+				return fmt.Errorf("invalid model: %w", err)
+			}
+			value = fullID
+			fmt.Printf("✓ Resolved to: %s\n", fullID)
 		}
 
 		if err := cfg.Set(key, value); err != nil {

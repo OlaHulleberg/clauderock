@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
 )
 
@@ -188,7 +189,17 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return cfg, nil
 	}
 
-	return m.Load(current)
+	cfg, err := m.Load(current)
+	if err != nil {
+		return nil, err
+	}
+
+	// Migrate models to v0.4.0 format if needed
+	if err := m.MigrateModelsToV040(current, cfg); err != nil {
+		return nil, fmt.Errorf("failed to migrate config: %w\nPlease run: clauderock manage config", err)
+	}
+
+	return cfg, nil
 }
 
 // Rename renames a profile
@@ -301,6 +312,45 @@ func (m *Manager) MigrateFromLegacyConfig(version string) error {
 	return nil
 }
 
+// MigrateModelsToV040 migrates model names from friendly format to full profile IDs
+func (m *Manager) MigrateModelsToV040(profileName string, cfg *config.Config) error {
+	// Check if models are already full profile IDs
+	modelIsFullID := aws.IsFullProfileID(cfg.Model)
+	fastModelIsFullID := aws.IsFullProfileID(cfg.FastModel)
+
+	// If both are already full IDs, no migration needed
+	if modelIsFullID && fastModelIsFullID {
+		return nil
+	}
+
+	fmt.Println("Upgrading config to cache model profile IDs...")
+
+	// Resolve models to full profile IDs
+	if !modelIsFullID {
+		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.Model)
+		if err != nil {
+			return fmt.Errorf("failed to resolve main model: %w", err)
+		}
+		cfg.Model = fullID
+	}
+
+	if !fastModelIsFullID {
+		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
+		if err != nil {
+			return fmt.Errorf("failed to resolve fast model: %w", err)
+		}
+		cfg.FastModel = fullID
+	}
+
+	// Save updated config
+	if err := m.Save(profileName, cfg); err != nil {
+		return fmt.Errorf("failed to save migrated config: %w", err)
+	}
+
+	fmt.Printf("✓ Cached model profile IDs for faster startup\n")
+	return nil
+}
+
 // Helper functions
 
 func (m *Manager) ensureBaseDir() error {
@@ -322,7 +372,7 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 		cfgVersion = ""
 	}
 
-	return &config.Config{
+	cfg := &config.Config{
 		Version:     cfgVersion,
 		Profile:     "default",
 		Region:      "us-east-1",
@@ -330,4 +380,18 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 		Model:       "anthropic.claude-sonnet-4-5",
 		FastModel:   "anthropic.claude-haiku-4-5",
 	}
+
+	// Attempt to resolve models to full profile IDs immediately
+	// If this fails, that's okay - migration will handle it later
+	mainID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.Model)
+	if err == nil {
+		cfg.Model = mainID
+	}
+
+	fastID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
+	if err == nil {
+		cfg.FastModel = fastID
+	}
+
+	return cfg
 }

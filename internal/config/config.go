@@ -103,12 +103,6 @@ func (c *Config) migrate(currentVersion string) bool {
 		migrated = true
 	}
 
-	// Future migrations:
-	// if compareVersions(c.Version, "0.4.0") < 0 {
-	//     c.migrateToV040()
-	//     migrated = true
-	// }
-
 	// Update version to current binary version
 	if migrated {
 		c.Version = currentVersion
