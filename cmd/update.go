@@ -13,6 +13,4 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(updateCmd)
-}
+// Registered by manage.go

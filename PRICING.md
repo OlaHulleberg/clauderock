@@ -39,22 +39,22 @@ Prices are per 1 million tokens.
 
 ```bash
 # View all-time stats
-clauderock stats
+clauderock manage stats
 
 # Today's usage
-clauderock stats --today
+clauderock manage stats --today
 
 # This month
-clauderock stats --month 2025-10
+clauderock manage stats --month 2025-10
 
 # Filter by profile
-clauderock stats --profile work-dev
+clauderock manage stats --profile work-dev
 
 # Filter by model
-clauderock stats --model anthropic.claude-opus-4
+clauderock manage stats --model anthropic.claude-opus-4
 
 # Export to CSV
-clauderock stats --export report.csv
+clauderock manage stats --export report.csv
 ```
 
 ## Metrics Tracked
@@ -160,16 +160,16 @@ Cache Efficiency:
 ### 3. Monitor Your Usage
 ```bash
 # Check daily costs
-clauderock stats --today
+clauderock manage stats --today
 
 # Compare profile costs
-clauderock stats --profile work-dev
-clauderock stats --profile personal
+clauderock manage stats --profile work-dev
+clauderock manage stats --profile personal
 ```
 
 ### 4. Export and Analyze
 ```bash
-clauderock stats --export monthly-report.csv
+clauderock manage stats --export monthly-report.csv
 # Open in Excel/Google Sheets to find patterns
 ```
 
@@ -179,10 +179,10 @@ If you want to start fresh or had incorrect data:
 
 ```bash
 # Reset with confirmation
-clauderock stats reset
+clauderock manage stats reset
 
 # Force reset (skip confirmation)
-clauderock stats reset --force
+clauderock manage stats reset --force
 ```
 
 **Warning:** This permanently deletes all usage history!
@@ -205,6 +205,6 @@ clauderock stats reset --force
 
 ## Questions?
 
-- Check your stats: `clauderock stats`
-- View all sessions: `clauderock stats --export all-time.csv`
+- Check your stats: `clauderock manage stats`
+- View all sessions: `clauderock manage stats --export all-time.csv`
 - Open an issue: https://github.com/OlaHulleberg/clauderock/issues

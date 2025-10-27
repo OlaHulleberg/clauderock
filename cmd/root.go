@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
@@ -13,13 +14,13 @@ import (
 )
 
 var (
-	profileFlag     string
-	modelFlag       string
-	fastModelFlag   string
-	awsProfileFlag  string
-	regionFlag      string
-	crossRegionFlag string
-	Version         = "dev"
+	clauderockProfileFlag     string
+	clauderockModelFlag       string
+	clauderockFastModelFlag   string
+	clauderockAWSProfileFlag  string
+	clauderockRegionFlag      string
+	clauderockCrossRegionFlag string
+	Version                   = "dev"
 )
 
 var rootCmd = &cobra.Command{
@@ -36,15 +37,22 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&profileFlag, "profile", "", "Use a specific profile for this run")
-	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Override main model for this run")
-	rootCmd.Flags().StringVar(&fastModelFlag, "fast-model", "", "Override fast model for this run")
-	rootCmd.Flags().StringVar(&awsProfileFlag, "aws-profile", "", "Override AWS profile for this run")
-	rootCmd.Flags().StringVar(&regionFlag, "region", "", "Override AWS region for this run")
-	rootCmd.Flags().StringVar(&crossRegionFlag, "cross-region", "", "Override cross-region setting for this run")
+	rootCmd.Flags().StringVar(&clauderockProfileFlag, "clauderock-profile", "", "Use a specific clauderock profile for this run")
+	rootCmd.Flags().StringVar(&clauderockModelFlag, "clauderock-model", "", "Override main model for this run")
+	rootCmd.Flags().StringVar(&clauderockFastModelFlag, "clauderock-fast-model", "", "Override fast model for this run")
+	rootCmd.Flags().StringVar(&clauderockAWSProfileFlag, "clauderock-aws-profile", "", "Override AWS profile for this run")
+	rootCmd.Flags().StringVar(&clauderockRegionFlag, "clauderock-region", "", "Override AWS region for this run")
+	rootCmd.Flags().StringVar(&clauderockCrossRegionFlag, "clauderock-cross-region", "", "Override cross-region setting for this run")
+
+	// Allow unknown flags to pass through to Claude CLI
+	rootCmd.FParseErrWhitelist.UnknownFlags = true
 }
 
 func runRoot(cmd *cobra.Command, args []string) error {
+	// Collect passthrough args for Claude CLI
+	// This includes all non-clauderock flags and positional arguments
+	passthroughArgs := collectPassthroughArgs()
+
 	// Check for updates in background
 	go updater.CheckForUpdates(Version)
 
@@ -55,11 +63,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	var cfg *config.Config
-	if profileFlag != "" {
+	if clauderockProfileFlag != "" {
 		// Load specific profile
-		cfg, err = profileMgr.Load(profileFlag)
+		cfg, err = profileMgr.Load(clauderockProfileFlag)
 		if err != nil {
-			return fmt.Errorf("failed to load profile '%s': %w", profileFlag, err)
+			return fmt.Errorf("failed to load profile '%s': %w", clauderockProfileFlag, err)
 		}
 	} else {
 		// Load current profile
@@ -71,24 +79,24 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Apply overrides from flags
 	hasOverrides := false
-	if awsProfileFlag != "" {
-		cfg.Profile = awsProfileFlag
+	if clauderockAWSProfileFlag != "" {
+		cfg.Profile = clauderockAWSProfileFlag
 		hasOverrides = true
 	}
-	if regionFlag != "" {
-		cfg.Region = regionFlag
+	if clauderockRegionFlag != "" {
+		cfg.Region = clauderockRegionFlag
 		hasOverrides = true
 	}
-	if crossRegionFlag != "" {
-		cfg.CrossRegion = crossRegionFlag
+	if clauderockCrossRegionFlag != "" {
+		cfg.CrossRegion = clauderockCrossRegionFlag
 		hasOverrides = true
 	}
-	if modelFlag != "" {
-		cfg.Model = modelFlag
+	if clauderockModelFlag != "" {
+		cfg.Model = clauderockModelFlag
 		hasOverrides = true
 	}
-	if fastModelFlag != "" {
-		cfg.FastModel = fastModelFlag
+	if clauderockFastModelFlag != "" {
+		cfg.FastModel = clauderockFastModelFlag
 		hasOverrides = true
 	}
 
@@ -100,19 +108,19 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Show overrides if any
 	if hasOverrides {
 		fmt.Println("Using overrides:")
-		if awsProfileFlag != "" {
+		if clauderockAWSProfileFlag != "" {
 			fmt.Printf("  AWS Profile: %s\n", cfg.Profile)
 		}
-		if regionFlag != "" {
+		if clauderockRegionFlag != "" {
 			fmt.Printf("  Region: %s\n", cfg.Region)
 		}
-		if crossRegionFlag != "" {
+		if clauderockCrossRegionFlag != "" {
 			fmt.Printf("  Cross Region: %s\n", cfg.CrossRegion)
 		}
-		if modelFlag != "" {
+		if clauderockModelFlag != "" {
 			fmt.Printf("  Model: %s\n", cfg.Model)
 		}
-		if fastModelFlag != "" {
+		if clauderockFastModelFlag != "" {
 			fmt.Printf("  Fast Model: %s\n", cfg.FastModel)
 		}
 		fmt.Println()
@@ -129,8 +137,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Get current profile name for tracking
 	currentProfile := "default"
-	if profileFlag != "" {
-		currentProfile = profileFlag
+	if clauderockProfileFlag != "" {
+		currentProfile = clauderockProfileFlag
 	} else {
 		current, err := profileMgr.GetCurrent()
 		if err == nil {
@@ -138,6 +146,51 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Launch Claude Code
-	return launcher.Launch(cfg, mainModelID, fastModelID, currentProfile)
+	// Launch Claude Code with passthrough args
+	return launcher.Launch(cfg, mainModelID, fastModelID, currentProfile, passthroughArgs)
+}
+
+// collectPassthroughArgs separates clauderock flags from Claude CLI args
+func collectPassthroughArgs() []string {
+	if len(os.Args) <= 1 {
+		return nil
+	}
+
+	var passthroughArgs []string
+	clauderockFlags := map[string]bool{
+		"--clauderock-profile":      true,
+		"--clauderock-model":        true,
+		"--clauderock-fast-model":   true,
+		"--clauderock-aws-profile":  true,
+		"--clauderock-region":       true,
+		"--clauderock-cross-region": true,
+	}
+
+	skip := false
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+
+		if skip {
+			skip = false
+			continue
+		}
+
+		// Check if this is a clauderock flag
+		if strings.HasPrefix(arg, "--clauderock-") {
+			// Check if it's a flag with value (--flag=value or --flag value)
+			if strings.Contains(arg, "=") {
+				// --flag=value format, skip entirely
+				continue
+			} else if clauderockFlags[arg] {
+				// --flag value format, skip this and next arg
+				skip = true
+				continue
+			}
+		}
+
+		// This is a passthrough arg
+		passthroughArgs = append(passthroughArgs, arg)
+	}
+
+	return passthroughArgs
 }

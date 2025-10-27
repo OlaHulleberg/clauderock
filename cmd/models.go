@@ -42,7 +42,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(modelsCmd)
+	// Registered by manage.go
 	modelsCmd.AddCommand(modelsListCmd)
 
 	modelsListCmd.Flags().StringVar(&providerFilter, "provider", "", "Filter by provider (e.g., anthropic, meta, amazon)")

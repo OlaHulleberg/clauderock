@@ -16,12 +16,12 @@ curl -fsSL https://raw.githubusercontent.com/OlaHulleberg/clauderock/main/instal
 
 ```bash
 # Interactive configuration (recommended)
-clauderock config
+clauderock manage config
 
 # Or configure manually
-clauderock config set profile my-aws-profile
-clauderock config set region us-east-1
-clauderock config set cross-region global
+clauderock manage config set profile my-aws-profile
+clauderock manage config set region us-east-1
+clauderock manage config set cross-region global
 
 # Launch Claude Code
 clauderock
@@ -40,9 +40,9 @@ Settings are stored in profiles at `~/.clauderock/profiles/`:
 | `fast-model` | Fast model | `anthropic.claude-haiku-4-5` |
 
 ```bash
-clauderock config                    # Interactive configuration
-clauderock config set <key> <value>  # Set a value
-clauderock config list               # View all settings
+clauderock manage config                    # Interactive configuration
+clauderock manage config set <key> <value>  # Set a value
+clauderock manage config list               # View all settings
 ```
 
 ### Multiple Profiles
@@ -50,43 +50,52 @@ clauderock config list               # View all settings
 Manage multiple named profiles for different use cases:
 
 ```bash
-clauderock profiles                  # List all profiles
-clauderock config save work-dev      # Save current config as profile
-clauderock config switch personal    # Switch to different profile
-clauderock --profile work-prod       # Use specific profile for one run
+clauderock manage profiles                  # List all profiles
+clauderock manage config save work-dev      # Save current config as profile
+clauderock manage config switch personal    # Switch to different profile
+clauderock --clauderock-profile work-prod   # Use specific profile for one run
 ```
 
 ## Usage
 
 ```bash
 # Launch Claude Code
-clauderock                             # Use current profile
-clauderock --profile work-dev          # Use specific profile
-clauderock --model anthropic.claude-opus-4  # Override model
+clauderock                                        # Use current profile
+clauderock --clauderock-profile work-dev          # Use specific profile
+clauderock --clauderock-model anthropic.claude-opus-4  # Override model
+
+# Pass Claude CLI flags
+clauderock --resume                               # Resume last session
+clauderock --continue                             # Continue last session
+clauderock --debug                                # Debug mode
+clauderock --print "analyze this code"            # Non-interactive mode
+
+# Combined (clauderock config + Claude CLI passthrough)
+clauderock --clauderock-profile work --resume --debug
 
 # Configuration
-clauderock config                      # Interactive wizard
-clauderock config list                 # View settings
-clauderock config set model <value>    # Update setting
+clauderock manage config                          # Interactive wizard
+clauderock manage config list                     # View settings
+clauderock manage config set model <value>        # Update setting
 
 # Profiles
-clauderock profiles                    # List profiles
-clauderock config save my-profile      # Save as new profile
-clauderock config switch my-profile    # Switch profile
+clauderock manage profiles                        # List profiles
+clauderock manage config save my-profile          # Save as new profile
+clauderock manage config switch my-profile        # Switch profile
 
 # Models
-clauderock models list                 # List available models
-clauderock models list --provider anthropic  # Filter by provider
+clauderock manage models list                     # List available models
+clauderock manage models list --provider anthropic  # Filter by provider
 
 # Stats & Cost Tracking
-clauderock stats                       # View usage statistics
-clauderock stats --today               # Today's stats
-clauderock stats --month 2025-10       # Monthly stats
-clauderock stats reset                 # Clear all stats
+clauderock manage stats                           # View usage statistics
+clauderock manage stats --today                   # Today's stats
+clauderock manage stats --month 2025-10           # Monthly stats
+clauderock manage stats reset                     # Clear all stats
 
 # Updates
-clauderock update                      # Update to latest version
-clauderock version                     # Show version
+clauderock manage update                          # Update to latest version
+clauderock manage version                         # Show version
 ```
 
 ### Override Flags
@@ -94,11 +103,11 @@ clauderock version                     # Show version
 Override any setting for a single run without changing your saved profile:
 
 ```bash
-clauderock --model anthropic.claude-opus-4
-clauderock --fast-model anthropic.claude-haiku-4-5
-clauderock --aws-profile production
-clauderock --region us-west-2
-clauderock --cross-region us
+clauderock --clauderock-model anthropic.claude-opus-4
+clauderock --clauderock-fast-model anthropic.claude-haiku-4-5
+clauderock --clauderock-aws-profile production
+clauderock --clauderock-region us-west-2
+clauderock --clauderock-cross-region us
 ```
 
 ## What It Does
@@ -118,6 +127,9 @@ List all available models from AWS Bedrock with provider filtering.
 
 ### ⚡ Quick Overrides
 Override any setting for a single run using command-line flags.
+
+### 🔄 Claude CLI Passthrough
+Pass any Claude CLI flags and commands directly through clauderock (e.g., `--resume`, `--debug`, `--print`).
 
 ### 📊 Usage Tracking
 Track coding sessions with:

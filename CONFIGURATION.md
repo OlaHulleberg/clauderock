@@ -9,7 +9,7 @@ Profiles allow you to save and switch between multiple configurations for differ
 ### List Profiles
 
 ```bash
-clauderock profiles
+clauderock manage profiles
 ```
 
 Shows all saved profiles and indicates which one is currently active.
@@ -18,14 +18,14 @@ Shows all saved profiles and indicates which one is currently active.
 
 ```bash
 # Save current configuration as a new profile
-clauderock config save my-profile
+clauderock manage config save my-profile
 ```
 
 ### Switch Profile
 
 ```bash
 # Switch to a different profile
-clauderock config switch my-profile
+clauderock manage config switch my-profile
 ```
 
 The switched profile becomes the active profile for all future runs.
@@ -34,21 +34,21 @@ The switched profile becomes the active profile for all future runs.
 
 ```bash
 # Delete a profile
-clauderock config delete my-profile
+clauderock manage config delete my-profile
 ```
 
 ### Rename Profile
 
 ```bash
 # Rename a profile
-clauderock config rename old-name new-name
+clauderock manage config rename old-name new-name
 ```
 
 ### Copy Profile
 
 ```bash
 # Copy a profile to create a template
-clauderock config copy template new-project
+clauderock manage config copy template new-project
 ```
 
 ### Migration from Old Config
@@ -60,7 +60,7 @@ If you have an old `~/.clauderock/config.json`, it will automatically be migrate
 Run the interactive configuration wizard to set up all your settings:
 
 ```bash
-clauderock config
+clauderock manage config
 ```
 
 The wizard will guide you through:
@@ -139,34 +139,34 @@ All configuration commands operate on the **current active profile**.
 ### Set a value
 
 ```bash
-clauderock config set <key> <value>
+clauderock manage config set <key> <value>
 ```
 
 Examples:
 ```bash
-clauderock config set profile my-aws-profile
-clauderock config set region us-east-1
-clauderock config set cross-region global
-clauderock config set model anthropic.claude-sonnet-4-5
-clauderock config set fast-model anthropic.claude-haiku-4-5
+clauderock manage config set profile my-aws-profile
+clauderock manage config set region us-east-1
+clauderock manage config set cross-region global
+clauderock manage config set model anthropic.claude-sonnet-4-5
+clauderock manage config set fast-model anthropic.claude-haiku-4-5
 ```
 
 ### Get a value
 
 ```bash
-clauderock config get <key>
+clauderock manage config get <key>
 ```
 
 Example:
 ```bash
-clauderock config get profile
+clauderock manage config get profile
 # Output: my-aws-profile
 ```
 
 ### List all settings
 
 ```bash
-clauderock config list
+clauderock manage config list
 ```
 
 Output:

@@ -57,11 +57,11 @@ go test ./...
 go build -o clauderock
 
 # Test configuration
-./clauderock config set profile test
-./clauderock config list
+./clauderock manage config set profile test
+./clauderock manage config list
 
 # Test with verbose output
-./clauderock version
+./clauderock manage version
 ```
 
 ## Code Style
@@ -138,7 +138,7 @@ The auto-update system:
 go build -ldflags "-X github.com/OlaHulleberg/clauderock/cmd.Version=v0.1.0" -o clauderock
 
 # This will detect v0.2.0 as newer
-./clauderock update
+./clauderock manage update
 ```
 
 ## Adding Dependencies

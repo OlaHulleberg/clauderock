@@ -87,7 +87,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(statsCmd)
+	// Registered by manage.go
 
 	statsCmd.Flags().StringVar(&statsProfile, "profile", "", "Filter by profile name")
 	statsCmd.Flags().StringVar(&statsModel, "model", "", "Filter by model")

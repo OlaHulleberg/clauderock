@@ -55,9 +55,9 @@ Available profiles:
 
 In this case, change your cross-region or model:
 ```bash
-clauderock config set cross-region us
+clauderock manage config set cross-region us
 # OR
-clauderock config set model claude-haiku-4-5
+clauderock manage config set model claude-haiku-4-5
 ```
 
 ## "cannot update development build"
@@ -141,10 +141,10 @@ The specified profile doesn't exist.
 **Solution:**
 ```bash
 # List all profiles
-clauderock profiles
+clauderock manage profiles
 
 # Create a new profile
-clauderock config save my-profile
+clauderock manage config save my-profile
 
 # Or switch to an existing profile
 cloudrock config switch default
@@ -157,7 +157,7 @@ Old `config.json` wasn't migrated to profiles.
 **Solution:**
 ```bash
 # Manually save your config as a profile
-clauderock config save default
+clauderock manage config save default
 
 # Verify it was created
 ls ~/.cloudrock/profiles/
@@ -170,10 +170,10 @@ You cannot delete the currently active profile.
 **Solution:**
 ```bash
 # Switch to a different profile first
-clauderock config switch another-profile
+clauderock manage config switch another-profile
 
 # Then delete
-clauderock config delete old-profile
+clauderock manage config delete old-profile
 ```
 
 ## Stats & Database Issues
@@ -194,7 +194,7 @@ This was a bug in earlier versions that has been fixed.
 **Solution:**
 ```bash
 # Reset stats to clear incorrect data
-clauderock stats reset
+clauderock manage stats reset
 
 # New sessions will be tracked correctly
 ```
@@ -219,10 +219,10 @@ Delete all usage statistics from the database.
 **Solution:**
 ```bash
 # With confirmation dialog
-clauderock stats reset
+clauderock manage stats reset
 
 # Skip confirmation (dangerous!)
-clauderock stats reset --force
+clauderock manage stats reset --force
 ```
 
 ## Session Tracking Issues
@@ -254,8 +254,8 @@ No API requests were made during the session.
 
 ## Still Having Issues?
 
-1. Check your configuration: `clauderock config list`
-2. Check your current profile: `clauderock profiles`
+1. Check your configuration: `clauderock manage config list`
+2. Check your current profile: `clauderock manage profiles`
 3. Verify AWS access: `aws bedrock list-inference-profiles --profile YOUR_PROFILE`
 4. Check stats database: `ls -lh ~/.clauderock/usage.db`
 5. Open an issue: https://github.com/OlaHulleberg/clauderock/issues

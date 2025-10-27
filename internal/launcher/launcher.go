@@ -11,7 +11,7 @@ import (
 )
 
 // Launch executes Claude Code with the proper environment variables for Bedrock
-func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName string) error {
+func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName string, args []string) error {
 	// Get current working directory for session tracking
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -37,8 +37,8 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 		fmt.Sprintf("AWS_REGION=%s", cfg.Region),
 	)
 
-	// Execute claude and wait for it to complete
-	cmd := exec.Command(claudePath)
+	// Execute claude with passthrough args and wait for it to complete
+	cmd := exec.Command(claudePath, args...)
 	cmd.Env = env
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
