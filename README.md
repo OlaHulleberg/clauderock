@@ -12,6 +12,39 @@ A lightweight CLI that configures Claude Code to use AWS Bedrock's cross-region 
 curl -fsSL https://raw.githubusercontent.com/OlaHulleberg/clauderock/main/install.sh | bash
 ```
 
+## Prerequisites & Setup
+
+Before using clauderock, ensure you have AWS CLI installed and authenticated:
+
+### 1. Install AWS CLI
+
+Follow the [AWS CLI installation guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) for your platform.
+
+### 2. Authenticate with AWS
+
+You must be logged in to AWS using one of these methods:
+
+**Option A: AWS SSO (recommended for teams)**
+```bash
+aws sso login --profile your-profile
+```
+
+**Option B: Static Credentials**
+```bash
+aws configure --profile your-profile
+# Enter your Access Key ID, Secret Access Key, and default region
+```
+
+### 3. Verify Authentication
+
+```bash
+aws sts get-caller-identity --profile your-profile
+```
+
+If this command succeeds, you're ready to use clauderock.
+
+For detailed AWS setup and IAM permissions, see [CONFIGURATION.md](CONFIGURATION.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ## Quick Start
 
 ```bash
@@ -151,7 +184,8 @@ All usage data stored locally in `~/.clauderock/usage.db`. Never sent anywhere.
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) installed
-- AWS credentials configured
+- [AWS CLI](https://aws.amazon.com/cli/) installed and configured
+- AWS credentials authenticated (via `aws sso login` or static credentials)
 - AWS Bedrock access with inference profiles enabled
 
 ## License

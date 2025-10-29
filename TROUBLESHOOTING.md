@@ -147,7 +147,7 @@ clauderock manage profiles
 clauderock manage config save my-profile
 
 # Or switch to an existing profile
-cloudrock config switch default
+clauderock config switch default
 ```
 
 ### Migration didn't work
@@ -160,7 +160,7 @@ Old `config.json` wasn't migrated to profiles.
 clauderock manage config save default
 
 # Verify it was created
-ls ~/.cloudrock/profiles/
+ls ~/.clauderock/profiles/
 ```
 
 ### Can't delete current profile

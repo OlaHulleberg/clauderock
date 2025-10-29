@@ -2,6 +2,109 @@
 
 `clauderock` stores configuration in profiles at `~/.clauderock/profiles/`.
 
+## AWS Setup
+
+Before using clauderock, you must have AWS CLI installed and authenticated.
+
+### Installing AWS CLI
+
+Follow the official [AWS CLI installation guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) for your operating system:
+
+- **macOS:** `brew install awscli` or download the installer
+- **Linux:** `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"`
+- **Windows:** Download the MSI installer from AWS
+
+### Authentication Methods
+
+You must authenticate with AWS using one of these methods:
+
+#### AWS SSO (Recommended for Organizations)
+
+If your organization uses AWS SSO:
+
+```bash
+# Configure SSO profile
+aws configure sso --profile your-profile
+
+# Login (required before each session or when token expires)
+aws sso login --profile your-profile
+```
+
+You'll need to re-run `aws sso login` periodically when your session expires (typically every 8-12 hours).
+
+#### Static Credentials
+
+For individual accounts or automation:
+
+```bash
+aws configure --profile your-profile
+```
+
+You'll be prompted for:
+- **AWS Access Key ID:** Your access key
+- **AWS Secret Access Key:** Your secret key
+- **Default region:** e.g., `us-east-1`
+- **Default output format:** `json` (recommended)
+
+Your credentials are stored in `~/.aws/credentials`:
+```ini
+[your-profile]
+aws_access_key_id = YOUR_ACCESS_KEY
+aws_secret_access_key = YOUR_SECRET_KEY
+```
+
+#### Temporary Credentials
+
+For assumed roles or temporary sessions, you can also use temporary credentials. These are automatically handled by the AWS SDK.
+
+### Verifying Authentication
+
+Test your AWS credentials are working:
+
+```bash
+aws sts get-caller-identity --profile your-profile
+```
+
+Expected output:
+```json
+{
+    "UserId": "AIDACKCEVSQ6C2EXAMPLE",
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:user/your-user"
+}
+```
+
+### Required IAM Permissions
+
+Your AWS credentials must have these permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:ListInferenceProfiles",
+        "bedrock:InvokeModel"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+If you get access denied errors, contact your AWS administrator to request these permissions.
+
+### AWS Bedrock Access
+
+Ensure AWS Bedrock is:
+1. Available in your selected region
+2. Enabled for your AWS account
+3. Has inference profiles enabled
+
+Check the [AWS Bedrock console](https://console.aws.amazon.com/bedrock/) to verify access.
+
 ## Profile Management
 
 Profiles allow you to save and switch between multiple configurations for different use cases (work, personal, different projects).
