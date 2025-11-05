@@ -315,6 +315,8 @@ func IsRecommendedModel(model, context string) bool {
 		return model == "anthropic.claude-sonnet-4-5"
 	case "fast":
 		return model == "anthropic.claude-haiku-4-5"
+	case "heavy":
+		return model == "anthropic.claude-opus-4-1"
 	default:
 		return false
 	}

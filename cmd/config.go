@@ -34,7 +34,8 @@ var configSetCmd = &cobra.Command{
   region       - AWS region (e.g., us-east-1)
   cross-region - Cross-region setting (us, eu, global)
   model        - Main model name (e.g., anthropic.claude-sonnet-4-5)
-  fast-model   - Fast model name (e.g., anthropic.claude-haiku-4-5)`,
+  fast-model   - Fast model name (e.g., anthropic.claude-haiku-4-5)
+  heavy-model  - Heavy model name (e.g., anthropic.claude-opus-4-1)`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
@@ -49,8 +50,8 @@ var configSetCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Special handling for model and fast-model: resolve to full profile ID
-		if key == "model" || key == "fast-model" {
+		// Special handling for model and fast-model and heavy-model: resolve to full profile ID
+		if key == "model" || key == "fast-model" || key == "heavy-model" {
 			fmt.Println("Validating model and resolving profile ID...")
 			fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, value)
 			if err != nil {
@@ -130,6 +131,7 @@ var configListCmd = &cobra.Command{
 		fmt.Printf("  cross-region: %s\n", cfg.CrossRegion)
 		fmt.Printf("  model:        %s\n", cfg.Model)
 		fmt.Printf("  fast-model:   %s\n", cfg.FastModel)
+		fmt.Printf("  heavy-model:  %s\n", cfg.HeavyModel)
 		return nil
 	},
 }

@@ -16,6 +16,7 @@ type Config struct {
 	CrossRegion string `json:"cross-region"`
 	Model       string `json:"model"`
 	FastModel   string `json:"fast-model"`
+	HeavyModel  string `json:"heavy-model"`
 }
 
 var validCrossRegions = map[string]bool{
@@ -175,6 +176,7 @@ func Load(currentVersion string) (*Config, error) {
 			CrossRegion: "global",
 			Model:       "anthropic.claude-sonnet-4-5",
 			FastModel:   "anthropic.claude-haiku-4-5",
+			HeavyModel:  "anthropic.claude-opus-4-1",
 		}
 		if err := cfg.Save(); err != nil {
 			return nil, fmt.Errorf("failed to create default config: %w", err)
@@ -242,6 +244,9 @@ func (c *Config) Validate() error {
 	if c.FastModel == "" {
 		return fmt.Errorf("fast-model is required")
 	}
+	if c.HeavyModel == "" {
+		return fmt.Errorf("heavy-model is required")
+	}
 	return nil
 }
 
@@ -260,6 +265,8 @@ func (c *Config) Set(key, value string) error {
 		c.Model = value
 	case "fast-model":
 		c.FastModel = value
+	case "heavy-model":
+		c.HeavyModel = value
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -278,6 +285,8 @@ func (c *Config) Get(key string) (string, error) {
 		return c.Model, nil
 	case "fast-model":
 		return c.FastModel, nil
+	case "heavy-model":
+		return c.HeavyModel, nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}

@@ -17,6 +17,7 @@ var (
 	clauderockProfileFlag     string
 	clauderockModelFlag       string
 	clauderockFastModelFlag   string
+	clauderockHeavyModelFlag  string
 	clauderockAWSProfileFlag  string
 	clauderockRegionFlag      string
 	clauderockCrossRegionFlag string
@@ -40,6 +41,7 @@ func init() {
 	rootCmd.Flags().StringVar(&clauderockProfileFlag, "clauderock-profile", "", "Use a specific clauderock profile for this run")
 	rootCmd.Flags().StringVar(&clauderockModelFlag, "clauderock-model", "", "Override main model for this run")
 	rootCmd.Flags().StringVar(&clauderockFastModelFlag, "clauderock-fast-model", "", "Override fast model for this run")
+	rootCmd.Flags().StringVar(&clauderockHeavyModelFlag, "clauderock-heavy-model", "", "Override heavy model for this run")
 	rootCmd.Flags().StringVar(&clauderockAWSProfileFlag, "clauderock-aws-profile", "", "Override AWS profile for this run")
 	rootCmd.Flags().StringVar(&clauderockRegionFlag, "clauderock-region", "", "Override AWS region for this run")
 	rootCmd.Flags().StringVar(&clauderockCrossRegionFlag, "clauderock-cross-region", "", "Override cross-region setting for this run")
@@ -105,6 +107,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		cfg.FastModel = clauderockFastModelFlag
 		hasOverrides = true
 	}
+	if clauderockHeavyModelFlag != "" {
+		if !aws.IsFullProfileID(clauderockHeavyModelFlag) {
+			return fmt.Errorf("--clauderock-heavy-model must be a full profile ID (e.g., 'global.anthropic.claude-opus-4-1-20250514-v1:0')\nRun 'clauderock manage models list' to see available models")
+		}
+		cfg.HeavyModel = clauderockHeavyModelFlag
+		hasOverrides = true
+	}
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
@@ -129,15 +138,19 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		if clauderockFastModelFlag != "" {
 			fmt.Printf("  Fast Model: %s\n", cfg.FastModel)
 		}
+		if clauderockHeavyModelFlag != "" {
+			fmt.Printf("  Heavy Model: %s\n", cfg.HeavyModel)
+		}
 		fmt.Println()
 	}
 
 	// Use stored inference profile IDs directly (no AWS query needed!)
 	mainModelID := cfg.Model
 	fastModelID := cfg.FastModel
+	heavyModelID := cfg.HeavyModel
 
 	// Validate that we have full profile IDs (migration should have handled this)
-	if mainModelID == "" || fastModelID == "" {
+	if mainModelID == "" || fastModelID == "" || heavyModelID == "" {
 		return fmt.Errorf("model configuration is incomplete, please run: clauderock manage config")
 	}
 
@@ -153,7 +166,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Launch Claude Code with passthrough args
-	return launcher.Launch(cfg, mainModelID, fastModelID, currentProfile, passthroughArgs)
+	return launcher.Launch(cfg, mainModelID, fastModelID, heavyModelID, currentProfile, passthroughArgs)
 }
 
 // collectPassthroughArgs separates clauderock flags from Claude CLI args
@@ -167,6 +180,7 @@ func collectPassthroughArgs() []string {
 		"--clauderock-profile":      true,
 		"--clauderock-model":        true,
 		"--clauderock-fast-model":   true,
+		"--clauderock-heavy-model":  true,
 		"--clauderock-aws-profile":  true,
 		"--clauderock-region":       true,
 		"--clauderock-cross-region": true,

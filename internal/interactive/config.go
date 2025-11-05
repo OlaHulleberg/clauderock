@@ -234,6 +234,20 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 		return fmt.Errorf("fast model selection failed: %w", err)
 	}
 
+	// Step 7: Heavy model selection
+	// Build model options with headers for heavy context
+	heavyModelOptions := buildModelOptions(models, "heavy")
+
+	selectedHeavyModel, err := InteractiveSelect(
+		"Select Heavy Model",
+		"Type to filter models...",
+		heavyModelOptions,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("heavy model selection failed: %w", err)
+	}
+
 	// Update configuration with selections
 	cfg.Profile = selectedProfile
 	cfg.Region = selectedRegion
@@ -253,6 +267,12 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 	}
 	cfg.FastModel = fastModelID
 
+	heavyModelID, err := aws.ResolveModelToProfileID(selectedProfile, selectedRegion, selectedCrossRegion, selectedHeavyModel)
+	if err != nil {
+		return fmt.Errorf("failed to resolve heavy model: %w", err)
+	}
+	cfg.HeavyModel = heavyModelID
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
@@ -270,6 +290,7 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 	fmt.Printf("  Cross Region: %s\n", cfg.CrossRegion)
 	fmt.Printf("  Model:        %s\n", cfg.Model)
 	fmt.Printf("  Fast Model:   %s\n", cfg.FastModel)
+	fmt.Printf("  Heavy Model:  %s\n", cfg.HeavyModel)
 
 	return nil
 }

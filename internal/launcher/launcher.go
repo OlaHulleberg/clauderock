@@ -12,7 +12,7 @@ import (
 )
 
 // Launch executes Claude Code with the proper environment variables for Bedrock
-func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName string, args []string) error {
+func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, profileName string, args []string) error {
 	// Get current working directory for session tracking
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -32,8 +32,9 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 	env := os.Environ()
 	env = append(env,
 		"CLAUDE_CODE_USE_BEDROCK=1",
-		fmt.Sprintf("ANTHROPIC_MODEL=%s", mainModelID),
+		fmt.Sprintf("ANTHROPIC_DEFAULT_SONNET_MODEL=%s", mainModelID),
 		fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", fastModelID),
+		fmt.Sprintf("ANTHROPIC_DEFAULT_OPUS_MODEL=%s", heavyModelID),
 		fmt.Sprintf("AWS_PROFILE=%s", cfg.Profile),
 		fmt.Sprintf("AWS_REGION=%s", cfg.Region),
 	)
@@ -53,7 +54,7 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 	// Validate model profile IDs in background
 	validationDone := make(chan error, 1)
 	go func() {
-		validationDone <- aws.ValidateProfileIDs(cfg.Profile, cfg.Region, mainModelID, fastModelID)
+		validationDone <- aws.ValidateProfileIDs(cfg.Profile, cfg.Region, mainModelID, fastModelID, heavyModelID)
 	}()
 
 	// Wait for either validation to complete or Claude Code to exit
@@ -85,7 +86,7 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 
 		// Track session end and return
 		sessionEnd := time.Now()
-		trackSession(cfg, mainModelID, fastModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
+		trackSession(cfg, mainModelID, fastModelID, heavyModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
 
 		if exitCode != 0 {
 			os.Exit(exitCode)
@@ -105,7 +106,7 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 
 		// Track session end and return
 		sessionEnd := time.Now()
-		trackSession(cfg, mainModelID, fastModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
+		trackSession(cfg, mainModelID, fastModelID, heavyModelID, profileName, cwd, sessionStart, sessionEnd, exitCode)
 
 		if exitCode != 0 {
 			os.Exit(exitCode)
@@ -114,24 +115,26 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 	}
 }
 
-func trackSession(cfg *config.Config, mainModelID, fastModelID, profileName, cwd string, sessionStart, sessionEnd time.Time, exitCode int) {
+func trackSession(cfg *config.Config, mainModelID, fastModelID, heavyModelID, profileName, cwd string, sessionStart, sessionEnd time.Time, exitCode int) {
 	// Track usage after Claude Code exits
 	tracker, err := usage.NewTracker()
 	if err == nil {
 		// Track session with timing information
 		trackErr := tracker.TrackSession(usage.SessionInfo{
-			StartTime:          sessionStart,
-			EndTime:            sessionEnd,
-			ProfileName:        profileName,
-			WorkingDirectory:   cwd,
-			AWSProfile:         cfg.Profile,
-			Region:             cfg.Region,
-			CrossRegion:        cfg.CrossRegion,
-			Model:              cfg.Model,
-			ModelProfileID:     mainModelID,
-			FastModel:          cfg.FastModel,
-			FastModelProfileID: fastModelID,
-			ExitCode:           exitCode,
+			StartTime:           sessionStart,
+			EndTime:             sessionEnd,
+			ProfileName:         profileName,
+			WorkingDirectory:    cwd,
+			AWSProfile:          cfg.Profile,
+			Region:              cfg.Region,
+			CrossRegion:         cfg.CrossRegion,
+			Model:               cfg.Model,
+			ModelProfileID:      mainModelID,
+			FastModel:           cfg.FastModel,
+			FastModelProfileID:  fastModelID,
+			HeavyModel:          cfg.HeavyModel,
+			HeavyModelProfileID: heavyModelID,
+			ExitCode:            exitCode,
 		})
 		tracker.Close()
 		if trackErr != nil {

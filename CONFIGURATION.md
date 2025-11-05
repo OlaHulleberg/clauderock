@@ -172,6 +172,7 @@ The wizard will guide you through:
 3. **Cross-Region Selection** - Choose between US, EU, or Global routing
 4. **Model Selection** - Browse and filter available models from all providers
 5. **Fast Model Selection** - Choose a fast model for quick operations
+6. **Heavy Model Selection** - Choose a heavy model for complex tasks
 
 Features:
 - Real-time search filtering for easy navigation
@@ -191,7 +192,8 @@ On first run, a default profile is created at `~/.clauderock/profiles/default.js
   "region": "us-east-1",
   "cross-region": "global",
   "model": "anthropic.claude-sonnet-4-5",
-  "fast-model": "anthropic.claude-haiku-4-5"
+  "fast-model": "anthropic.claude-haiku-4-5",
+  "heavy-model": "anthropic.claude-opus-4-1"
 }
 ```
 
@@ -235,6 +237,13 @@ Fast model identifier for quick operations (used by Claude Code for certain task
 - `"anthropic.claude-haiku-4-5"` - Fast Anthropic model
 - `"anthropic.claude-haiku-3-5"` - Previous fast model
 
+### `heavy-model`
+Heavy model identifier for complex tasks requiring maximum capability (used by Claude Code for demanding operations). Uses the same `provider.model-name` format.
+
+**Examples:**
+- `"anthropic.claude-opus-4-1"` - Latest Opus model (recommended)
+- `"anthropic.claude-opus-4"` - Previous Opus model
+
 ## Managing Configuration
 
 All configuration commands operate on the **current active profile**.
@@ -252,6 +261,7 @@ clauderock manage config set region us-east-1
 clauderock manage config set cross-region global
 clauderock manage config set model anthropic.claude-sonnet-4-5
 clauderock manage config set fast-model anthropic.claude-haiku-4-5
+clauderock manage config set heavy-model anthropic.claude-opus-4-1
 ```
 
 ### Get a value
@@ -282,6 +292,7 @@ Configuration:
   cross-region: global
   model:        anthropic.claude-sonnet-4-5
   fast-model:   anthropic.claude-haiku-4-5
+  heavy-model:  anthropic.claude-opus-4-1
 ```
 
 ## Supported Models

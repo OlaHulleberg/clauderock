@@ -21,18 +21,20 @@ func NewTracker() (*Tracker, error) {
 }
 
 type SessionInfo struct {
-	StartTime          time.Time
-	EndTime            time.Time
-	ProfileName        string
-	WorkingDirectory   string
-	AWSProfile         string
-	Region             string
-	CrossRegion        string
-	Model              string
-	ModelProfileID     string
-	FastModel          string
-	FastModelProfileID string
-	ExitCode           int
+	StartTime           time.Time
+	EndTime             time.Time
+	ProfileName         string
+	WorkingDirectory    string
+	AWSProfile          string
+	Region              string
+	CrossRegion         string
+	Model               string
+	ModelProfileID      string
+	FastModel           string
+	FastModelProfileID  string
+	HeavyModel          string
+	HeavyModelProfileID string
+	ExitCode            int
 }
 
 func (t *Tracker) TrackSession(info SessionInfo) error {

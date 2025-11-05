@@ -56,12 +56,13 @@ go mod tidy
 **Config Structure** (`internal/config/config.go`):
 ```json
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "profile": "default",
   "region": "us-east-1",
   "cross-region": "global",
   "model": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-  "fast-model": "global.anthropic.claude-haiku-4-5-20250929-v1:0"
+  "fast-model": "global.anthropic.claude-haiku-4-5-20250929-v1:0",
+  "heavy-model": "global.anthropic.claude-opus-4-1-20250514-v1:0"
 }
 ```
 
@@ -129,6 +130,7 @@ All `--clauderock-*` flags in root command override config for single run:
 - `--clauderock-profile`: Use specific profile
 - `--clauderock-model`: Override main model (must be full profile ID)
 - `--clauderock-fast-model`: Override fast model (must be full profile ID)
+- `--clauderock-heavy-model`: Override heavy model (must be full profile ID)
 - `--clauderock-aws-profile`: Override AWS profile
 - `--clauderock-region`: Override AWS region
 - `--clauderock-cross-region`: Override cross-region setting
@@ -142,8 +144,9 @@ The `collectPassthroughArgs()` function separates clauderock flags from Claude C
 When launching Claude Code:
 ```bash
 CLAUDE_CODE_USE_BEDROCK=1
-ANTHROPIC_MODEL={full-profile-id}
+ANTHROPIC_DEFAULT_SONNET_MODEL={full-profile-id}
 ANTHROPIC_DEFAULT_HAIKU_MODEL={full-profile-id}
+ANTHROPIC_DEFAULT_OPUS_MODEL={full-profile-id}
 AWS_PROFILE={aws-profile}
 AWS_REGION={region}
 ```

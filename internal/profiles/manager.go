@@ -199,6 +199,11 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return nil, fmt.Errorf("failed to migrate config: %w\nPlease run: clauderock manage config", err)
 	}
 
+	// Migrate to v0.5.0 format (add heavy model) if needed
+	if err := m.MigrateModelsToV050(current, cfg); err != nil {
+		return nil, fmt.Errorf("failed to migrate config to v0.5.0: %w\nPlease run: clauderock manage config", err)
+	}
+
 	return cfg, nil
 }
 
@@ -351,6 +356,27 @@ func (m *Manager) MigrateModelsToV040(profileName string, cfg *config.Config) er
 	return nil
 }
 
+// MigrateModelsToV050 adds heavy model field if missing
+func (m *Manager) MigrateModelsToV050(profileName string, cfg *config.Config) error {
+	// If HeavyModel is already set, no migration needed
+	if cfg.HeavyModel != "" {
+		return nil
+	}
+
+	fmt.Println("Upgrading config to add heavy model support...")
+
+	// Set heavy model to the same as default model (user can change later)
+	cfg.HeavyModel = cfg.Model
+
+	// Save updated config
+	if err := m.Save(profileName, cfg); err != nil {
+		return fmt.Errorf("failed to save migrated config: %w", err)
+	}
+
+	fmt.Printf("✓ Added heavy model support (set to default model)\n")
+	return nil
+}
+
 // Helper functions
 
 func (m *Manager) ensureBaseDir() error {
@@ -379,6 +405,7 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 		CrossRegion: "global",
 		Model:       "anthropic.claude-sonnet-4-5",
 		FastModel:   "anthropic.claude-haiku-4-5",
+		HeavyModel:  "anthropic.claude-opus-4-1",
 	}
 
 	// Attempt to resolve models to full profile IDs immediately
@@ -391,6 +418,11 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 	fastID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
 	if err == nil {
 		cfg.FastModel = fastID
+	}
+
+	heavyID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.HeavyModel)
+	if err == nil {
+		cfg.HeavyModel = heavyID
 	}
 
 	return cfg
