@@ -141,9 +141,6 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("model configuration is incomplete, please run: clauderock manage config")
 	}
 
-	fmt.Printf("Using model: %s\n", mainModelID)
-	fmt.Printf("Using fast model: %s\n", fastModelID)
-
 	// Get current profile name for tracking
 	currentProfile := "default"
 	if clauderockProfileFlag != "" {
