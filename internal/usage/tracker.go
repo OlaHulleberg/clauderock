@@ -83,22 +83,22 @@ func (t *Tracker) TrackSession(info SessionInfo) error {
 }
 
 type SessionStats struct {
-	TotalSessions       int
-	TotalDurationHours  float64
-	AvgSessionMinutes   float64
-	TotalRequests       int64
-	TotalInputTokens    int64
-	TotalOutputTokens   int64
-	AvgTPM              float64
-	PeakTPM             float64
-	P95TPM              float64
-	AvgRPM              float64
-	PeakRPM             float64
-	P95RPM              float64
-	AvgCacheHitRate     float64
-	ModelBreakdown      map[string]int
-	ProfileBreakdown    map[string]int
-	TopSessions         []Session
+	TotalSessions      int
+	TotalDurationHours float64
+	AvgSessionMinutes  float64
+	TotalRequests      int64
+	TotalInputTokens   int64
+	TotalOutputTokens  int64
+	AvgTPM             float64
+	PeakTPM            float64
+	P95TPM             float64
+	AvgRPM             float64
+	PeakRPM            float64
+	P95RPM             float64
+	AvgCacheHitRate    float64
+	ModelBreakdown     map[string]int
+	ProfileBreakdown   map[string]int
+	TopSessions        []Session
 }
 
 func (t *Tracker) GetSessionStats(filter QueryFilter) (*SessionStats, error) {

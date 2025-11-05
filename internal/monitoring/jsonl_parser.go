@@ -79,13 +79,24 @@ func FindSessionJSONL(workingDir string, sessionStart time.Time) (string, error)
 		return "", fmt.Errorf("failed to glob JSONL files: %w", err)
 	}
 
-	if len(files) == 0 {
-		return "", fmt.Errorf("no JSONL files found in %s", projectDir)
+	// Filter out agent files (these are from the Task tool and should not be tracked)
+	var sessionFiles []string
+	for _, file := range files {
+		base := filepath.Base(file)
+		// Skip agent files (pattern: agent-*.jsonl)
+		if strings.HasPrefix(base, "agent-") {
+			continue
+		}
+		sessionFiles = append(sessionFiles, file)
+	}
+
+	if len(sessionFiles) == 0 {
+		return "", fmt.Errorf("no session JSONL files found in %s (found %d agent files)", projectDir, len(files)-len(sessionFiles))
 	}
 
 	// If only one file, return it
-	if len(files) == 1 {
-		return files[0], nil
+	if len(sessionFiles) == 1 {
+		return sessionFiles[0], nil
 	}
 
 	// Find the file with modification time closest to session start
@@ -95,7 +106,7 @@ func FindSessionJSONL(workingDir string, sessionStart time.Time) (string, error)
 	}
 
 	var filesWithTime []fileWithTime
-	for _, file := range files {
+	for _, file := range sessionFiles {
 		info, err := os.Stat(file)
 		if err != nil {
 			continue
