@@ -1,6 +1,11 @@
 package pricing
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
 
 type ModelPrice struct {
 	Provider   string
@@ -110,7 +115,8 @@ func CalculateCost(model string, inputTokens, outputTokens int64) float64 {
 func GetProviderName(model string) string {
 	parts := strings.SplitN(model, ".", 2)
 	if len(parts) == 2 {
-		return strings.Title(parts[0])
+		caser := cases.Title(language.English)
+		return caser.String(parts[0])
 	}
 	return "Unknown"
 }

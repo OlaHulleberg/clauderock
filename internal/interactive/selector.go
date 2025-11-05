@@ -9,10 +9,28 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	defaultInputCharLimit = 100
+	defaultInputWidth     = 60
+	defaultSelectorWidth  = 80
+	defaultSelectorHeight = 20
+	maxVisibleOptions     = 10
+)
+
+var (
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+	normalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")).Underline(true)
+	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	countStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
+)
+
 // SelectOption represents an option in the selector
 type SelectOption struct {
-	ID      string // The value to return when selected
-	Display string // The text to display
+	ID       string // The value to return when selected
+	Display  string // The text to display
+	IsHeader bool   // If true, this is a non-selectable header
 }
 
 // selectorModel is the Bubbletea model for real-time selection
@@ -36,13 +54,13 @@ func InteractiveSelect(title, placeholder string, options []SelectOption, curren
 	ti := textinput.New()
 	ti.Placeholder = placeholder
 	ti.Focus()
-	ti.CharLimit = 100
-	ti.Width = 60
+	ti.CharLimit = defaultInputCharLimit
+	ti.Width = defaultInputWidth
 
-	// Find initial cursor position
+	// Find initial cursor position (skip headers)
 	cursor := 0
 	for i, opt := range options {
-		if opt.ID == currentValue {
+		if !opt.IsHeader && opt.ID == currentValue {
 			cursor = i
 			break
 		}
@@ -55,9 +73,12 @@ func InteractiveSelect(title, placeholder string, options []SelectOption, curren
 		options:     options,
 		filtered:    options,
 		cursor:      cursor,
-		width:       80,
-		height:      20,
+		width:       defaultSelectorWidth,
+		height:      defaultSelectorHeight,
 	}
+
+	// Ensure cursor starts on a non-header item
+	m.moveCursorToNearestSelectableOption()
 
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
@@ -71,6 +92,29 @@ func InteractiveSelect(title, placeholder string, options []SelectOption, curren
 	}
 
 	return result.selected, nil
+}
+
+// moveCursorToNearestSelectableOption moves cursor to nearest non-header item
+func (m *selectorModel) moveCursorToNearestSelectableOption() {
+	if m.cursor >= len(m.filtered) {
+		m.cursor = len(m.filtered) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+
+	// Try moving forward to find non-header
+	for m.cursor < len(m.filtered) && m.filtered[m.cursor].IsHeader {
+		m.cursor++
+	}
+
+	// If all forward items are headers, try backwards
+	if m.cursor >= len(m.filtered) {
+		m.cursor = len(m.filtered) - 1
+		for m.cursor > 0 && m.filtered[m.cursor].IsHeader {
+			m.cursor--
+		}
+	}
 }
 
 // Init initializes the model
@@ -95,7 +139,7 @@ func (m selectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyEnter:
-			if len(m.filtered) > 0 {
+			if len(m.filtered) > 0 && !m.filtered[m.cursor].IsHeader {
 				m.selected = m.filtered[m.cursor].ID
 				m.quitting = true
 				return m, tea.Quit
@@ -104,11 +148,19 @@ func (m selectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyUp:
 			if m.cursor > 0 {
 				m.cursor--
+				// Skip headers when moving up
+				for m.cursor > 0 && m.filtered[m.cursor].IsHeader {
+					m.cursor--
+				}
 			}
 
 		case tea.KeyDown:
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
+				// Skip headers when moving down
+				for m.cursor < len(m.filtered)-1 && m.filtered[m.cursor].IsHeader {
+					m.cursor++
+				}
 			}
 
 		default:
@@ -118,13 +170,8 @@ func (m selectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Filter options in real-time
 			m.filtered = filterOptions(m.options, m.textInput.Value())
 
-			// Reset cursor if out of bounds
-			if m.cursor >= len(m.filtered) {
-				m.cursor = len(m.filtered) - 1
-			}
-			if m.cursor < 0 {
-				m.cursor = 0
-			}
+			// Reset cursor if out of bounds and ensure it's on a selectable item
+			m.moveCursorToNearestSelectableOption()
 
 			return m, cmd
 		}
@@ -143,30 +190,24 @@ func (m selectorModel) View() string {
 	var b strings.Builder
 
 	// Title and input
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	b.WriteString(titleStyle.Render(m.title))
 	b.WriteString("\n")
 	b.WriteString(m.textInput.View())
 	b.WriteString("\n\n")
 
 	// Show filtered results count
-	countStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	b.WriteString(countStyle.Render(fmt.Sprintf("Showing %d of %d options", len(m.filtered), len(m.options))))
 	b.WriteString("\n\n")
 
 	// Render filtered list
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-
-	maxVisible := 10
-	start := m.cursor - maxVisible/2
+	start := m.cursor - maxVisibleOptions/2
 	if start < 0 {
 		start = 0
 	}
-	end := start + maxVisible
+	end := start + maxVisibleOptions
 	if end > len(m.filtered) {
 		end = len(m.filtered)
-		start = end - maxVisible
+		start = end - maxVisibleOptions
 		if start < 0 {
 			start = 0
 		}
@@ -175,7 +216,10 @@ func (m selectorModel) View() string {
 	for i := start; i < end; i++ {
 		option := m.filtered[i]
 
-		if i == m.cursor {
+		if option.IsHeader {
+			// Render headers with special style
+			b.WriteString(headerStyle.Render(option.Display))
+		} else if i == m.cursor {
 			b.WriteString(selectedStyle.Render("> " + option.Display))
 		} else {
 			b.WriteString(normalStyle.Render("  " + option.Display))
@@ -185,7 +229,6 @@ func (m selectorModel) View() string {
 
 	// Help text
 	b.WriteString("\n")
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	b.WriteString(helpStyle.Render("↑/↓: navigate • Enter: select • Esc: cancel"))
 
 	return b.String()
@@ -199,11 +242,41 @@ func filterOptions(options []SelectOption, searchTerm string) []SelectOption {
 
 	searchLower := strings.ToLower(searchTerm)
 	var filtered []SelectOption
+	var currentHeader *SelectOption
+	inRecommendedSection := false
 
 	for _, option := range options {
+		if option.IsHeader {
+			// Track if we're entering the RECOMMENDED section
+			if option.Display == recommendedSectionHeader {
+				inRecommendedSection = true
+				currentHeader = nil
+				continue
+			}
+
+			// Exit RECOMMENDED section when we hit another header
+			if inRecommendedSection {
+				inRecommendedSection = false
+			}
+
+			// Keep track of current header
+			currentHeader = &option
+			continue
+		}
+
+		// Skip items in RECOMMENDED section during search
+		if inRecommendedSection {
+			continue
+		}
+
 		// Match against ID or Display (case-insensitive)
 		if strings.Contains(strings.ToLower(option.ID), searchLower) ||
 			strings.Contains(strings.ToLower(option.Display), searchLower) {
+			// Add the header before the first match in this section
+			if currentHeader != nil {
+				filtered = append(filtered, *currentHeader)
+				currentHeader = nil // Only add header once per section
+			}
 			filtered = append(filtered, option)
 		}
 	}

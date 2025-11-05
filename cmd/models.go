@@ -9,6 +9,8 @@ import (
 	"github.com/OlaHulleberg/clauderock/internal/config"
 	"github.com/OlaHulleberg/clauderock/internal/profiles"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -128,8 +130,9 @@ func runModelsList(cmd *cobra.Command, args []string) error {
 
 func groupModelsByProvider(models []aws.ModelInfo) map[string][]aws.ModelInfo {
 	grouped := make(map[string][]aws.ModelInfo)
+	caser := cases.Title(language.English)
 	for _, m := range models {
-		provider := strings.Title(m.Provider)
+		provider := caser.String(m.Provider)
 		grouped[provider] = append(grouped[provider], m)
 	}
 	return grouped

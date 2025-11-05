@@ -91,6 +91,63 @@ func formatAvailableProfiles(profiles []types.InferenceProfileSummary) string {
 	return builder.String()
 }
 
+// extractModelNameFromVersion removes version suffixes from a model string
+// Input: "claude-sonnet-4-5-20250929-v1:0"
+// Output: "claude-sonnet-4-5"
+func extractModelNameFromVersion(modelWithVersion string) string {
+	parts := strings.Split(modelWithVersion, "-")
+	var modelParts []string
+	for _, part := range parts {
+		// Stop if we hit a date pattern (8 digits) or version pattern
+		if len(part) == 8 || strings.HasPrefix(part, "v") || strings.Contains(part, ":") {
+			break
+		}
+		modelParts = append(modelParts, part)
+	}
+	return strings.Join(modelParts, "-")
+}
+
+// parseProfileID extracts provider and model name from a profile ID
+// Input: "global.anthropic.claude-sonnet-4-5-20250929-v1:0", "global"
+// Output: "anthropic", "claude-sonnet-4-5", true
+func parseProfileID(profileID, crossRegionPrefix string) (provider, modelName string, ok bool) {
+	if !strings.HasPrefix(profileID, crossRegionPrefix+".") {
+		return "", "", false
+	}
+
+	// Remove cross-region prefix
+	remaining := strings.TrimPrefix(profileID, crossRegionPrefix+".")
+
+	// Split on first dot to separate provider from rest
+	firstDotIndex := strings.Index(remaining, ".")
+	if firstDotIndex == -1 {
+		return "", "", false
+	}
+
+	provider = remaining[:firstDotIndex]
+	modelWithVersion := remaining[firstDotIndex+1:]
+
+	// Extract model name without version using helper
+	modelName = extractModelNameFromVersion(modelWithVersion)
+	if modelName == "" {
+		return "", "", false
+	}
+
+	return provider, modelName, true
+}
+
+// parseModelName splits a model name in format "provider.model-name" into parts
+// Returns provider, modelName, and ok flag
+// Input: "anthropic.claude-sonnet-4-5" → "anthropic", "claude-sonnet-4-5", true
+// Input: "invalid" → "", "", false
+func parseModelName(fullModelName string) (provider, modelName string, ok bool) {
+	parts := strings.SplitN(fullModelName, ".", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
 // IsFullProfileID checks if a string is a full profile ID
 // Input: "global.anthropic.claude-sonnet-4-5-20250929-v1:0" → true
 // Input: "anthropic.claude-sonnet-4-5" → false
@@ -129,19 +186,9 @@ func ExtractFriendlyModelName(profileID string) string {
 	provider := remaining[:firstDotIndex]
 	modelWithVersion := remaining[firstDotIndex+1:]
 
-	// Extract model name without version (remove date pattern and version)
-	modelParts := strings.Split(modelWithVersion, "-")
-	var cleanParts []string
-	for _, part := range modelParts {
-		// Stop if we hit a date pattern (8 digits) or version pattern
-		if len(part) == 8 || strings.HasPrefix(part, "v") || strings.Contains(part, ":") {
-			break
-		}
-		cleanParts = append(cleanParts, part)
-	}
-
-	if len(cleanParts) > 0 {
-		modelName := strings.Join(cleanParts, "-")
+	// Extract model name without version using helper
+	modelName := extractModelNameFromVersion(modelWithVersion)
+	if modelName != "" {
 		return fmt.Sprintf("%s.%s", provider, modelName)
 	}
 
@@ -216,51 +263,16 @@ func GetAvailableModels(profile, region, crossRegion string) ([]string, error) {
 
 	// Extract unique model names for the specified cross-region
 	modelMap := make(map[string]bool)
-	prefix := fmt.Sprintf("%s.", crossRegion)
 
 	for _, profile := range result.InferenceProfileSummaries {
 		if profile.InferenceProfileId != nil {
 			profileID := aws.ToString(profile.InferenceProfileId)
-			if strings.HasPrefix(profileID, prefix) {
-				// Extract provider and model name from profile ID
-				// Format: {cross-region}.{provider}.{model-name}-{version}
-				// Example: global.anthropic.claude-sonnet-4-5-20250929-v1:0
-				// We want to extract: anthropic.claude-sonnet-4-5
 
-				// Remove cross-region prefix
-				remaining := strings.TrimPrefix(profileID, prefix)
-
-				// Split on first dot to separate provider from rest
-				firstDotIndex := strings.Index(remaining, ".")
-				if firstDotIndex == -1 {
-					continue
-				}
-
-				provider := remaining[:firstDotIndex]
-				modelWithVersion := remaining[firstDotIndex+1:]
-
-				// Extract model name without version
-				// Split by hyphen and take parts that form the model name
-				// We need to handle versions like "claude-sonnet-4-5-20250929-v1:0"
-				// and extract just "claude-sonnet-4-5"
-				parts := strings.Split(modelWithVersion, "-")
-
-				// Build model name by taking parts until we hit a date-like pattern (8 digits)
-				var modelParts []string
-				for _, part := range parts {
-					// Stop if we hit a date pattern (8 digits) or version pattern
-					if len(part) == 8 || strings.HasPrefix(part, "v") || strings.Contains(part, ":") {
-						break
-					}
-					modelParts = append(modelParts, part)
-				}
-
-				if len(modelParts) > 0 {
-					modelName := strings.Join(modelParts, "-")
-					// Store in format: provider.model-name
-					fullModelName := fmt.Sprintf("%s.%s", provider, modelName)
-					modelMap[fullModelName] = true
-				}
+			// Use helper to parse profile ID
+			provider, modelName, ok := parseProfileID(profileID, crossRegion)
+			if ok {
+				fullModelName := fmt.Sprintf("%s.%s", provider, modelName)
+				modelMap[fullModelName] = true
 			}
 		}
 	}
@@ -271,14 +283,78 @@ func GetAvailableModels(profile, region, crossRegion string) ([]string, error) {
 		models = append(models, model)
 	}
 
-	// Sort models alphabetically (groups by provider, then by model name)
-	sort.Strings(models)
+	// Sort models by provider first, then model name
+	sort.Slice(models, func(i, j int) bool {
+		providerI, modelI, okI := parseModelName(models[i])
+		providerJ, modelJ, okJ := parseModelName(models[j])
+
+		if !okI || !okJ {
+			return models[i] < models[j]
+		}
+
+		// Compare provider first
+		if providerI != providerJ {
+			return providerI < providerJ
+		}
+
+		// If same provider, compare model name
+		return modelI < modelJ
+	})
 
 	if len(models) == 0 {
 		return nil, fmt.Errorf("no models found for cross-region '%s'", crossRegion)
 	}
 
 	return models, nil
+}
+
+// IsRecommendedModel returns true if the model is recommended for the given context
+func IsRecommendedModel(model, context string) bool {
+	switch context {
+	case "main":
+		return model == "anthropic.claude-sonnet-4-5"
+	case "fast":
+		return model == "anthropic.claude-haiku-4-5"
+	default:
+		return false
+	}
+}
+
+// SortModelsWithRecommendation sorts models with the recommended model for the context at the top
+func SortModelsWithRecommendation(models []string, context string) []string {
+	sorted := make([]string, len(models))
+	copy(sorted, models)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		iRecommended := IsRecommendedModel(sorted[i], context)
+		jRecommended := IsRecommendedModel(sorted[j], context)
+
+		// Recommended model comes first
+		if iRecommended && !jRecommended {
+			return true
+		}
+		if !iRecommended && jRecommended {
+			return false
+		}
+
+		// Otherwise, sort by provider then model name
+		providerI, modelI, okI := parseModelName(sorted[i])
+		providerJ, modelJ, okJ := parseModelName(sorted[j])
+
+		if !okI || !okJ {
+			return sorted[i] < sorted[j]
+		}
+
+		// Compare provider first
+		if providerI != providerJ {
+			return providerI < providerJ
+		}
+
+		// If same provider, compare model name
+		return modelI < modelJ
+	})
+
+	return sorted
 }
 
 // ValidateProfileIDs validates that the given profile IDs exist in AWS Bedrock
@@ -349,51 +425,19 @@ func GetAvailableModelsDetailed(profile, region, crossRegion string) ([]ModelInf
 
 	// Extract unique model names for the specified cross-region
 	modelMap := make(map[string]ModelInfo)
-	prefix := fmt.Sprintf("%s.", crossRegion)
 
 	for _, profile := range result.InferenceProfileSummaries {
 		if profile.InferenceProfileId != nil {
 			profileID := aws.ToString(profile.InferenceProfileId)
-			if strings.HasPrefix(profileID, prefix) {
-				// Extract provider and model name from profile ID
-				// Format: {cross-region}.{provider}.{model-name}-{version}
-				// Example: global.anthropic.claude-sonnet-4-5-20250929-v1:0
-				// We want to extract: anthropic.claude-sonnet-4-5
 
-				// Remove cross-region prefix
-				remaining := strings.TrimPrefix(profileID, prefix)
-
-				// Split on first dot to separate provider from rest
-				firstDotIndex := strings.Index(remaining, ".")
-				if firstDotIndex == -1 {
-					continue
-				}
-
-				provider := remaining[:firstDotIndex]
-				modelWithVersion := remaining[firstDotIndex+1:]
-
-				// Extract model name without version
-				parts := strings.Split(modelWithVersion, "-")
-
-				// Build model name by taking parts until we hit a date-like pattern (8 digits)
-				var modelParts []string
-				for _, part := range parts {
-					// Stop if we hit a date pattern (8 digits) or version pattern
-					if len(part) == 8 || strings.HasPrefix(part, "v") || strings.Contains(part, ":") {
-						break
-					}
-					modelParts = append(modelParts, part)
-				}
-
-				if len(modelParts) > 0 {
-					modelName := strings.Join(modelParts, "-")
-					// Store in format: provider.model-name
-					fullModelName := fmt.Sprintf("%s.%s", provider, modelName)
-					modelMap[fullModelName] = ModelInfo{
-						Name:     fullModelName,
-						Provider: provider,
-						Model:    modelName,
-					}
+			// Use helper to parse profile ID
+			provider, modelName, ok := parseProfileID(profileID, crossRegion)
+			if ok {
+				fullModelName := fmt.Sprintf("%s.%s", provider, modelName)
+				modelMap[fullModelName] = ModelInfo{
+					Name:     fullModelName,
+					Provider: provider,
+					Model:    modelName,
 				}
 			}
 		}

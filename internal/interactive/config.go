@@ -7,7 +7,108 @@ import (
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/awsutil"
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+const (
+	recommendedSectionHeader = "RECOMMENDED"
+)
+
+// formatModelDisplay formats a model name with provider
+func formatModelDisplay(model string, showProvider bool) string {
+	// Parse provider.model-name format
+	parts := strings.SplitN(model, ".", 2)
+
+	if len(parts) == 2 {
+		caser := cases.Title(language.English)
+		provider := caser.String(parts[0])
+		modelName := parts[1]
+
+		if showProvider {
+			return fmt.Sprintf("  ⭐ %s - %s", provider, modelName)
+		}
+		return fmt.Sprintf("  %s", modelName)
+	}
+
+	if showProvider {
+		return fmt.Sprintf("  ⭐ %s", model)
+	}
+	return fmt.Sprintf("  %s", model)
+}
+
+// buildModelOptions creates SelectOptions with headers for recommended and provider sections
+func buildModelOptions(models []string, context string) []SelectOption {
+	var options []SelectOption
+
+	// Add "Recommended" section
+	var recommendedModel string
+	for _, m := range models {
+		if aws.IsRecommendedModel(m, context) {
+			recommendedModel = m
+			break
+		}
+	}
+
+	if recommendedModel != "" {
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  recommendedSectionHeader,
+			IsHeader: true,
+		})
+		options = append(options, SelectOption{
+			ID:      recommendedModel,
+			Display: formatModelDisplay(recommendedModel, true), // Show provider for recommended
+		})
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  "",
+			IsHeader: true,
+		})
+	}
+
+	// Group models by provider
+	providerModels := make(map[string][]string)
+	var providers []string
+
+	for _, m := range models {
+		parts := strings.SplitN(m, ".", 2)
+		if len(parts) == 2 {
+			provider := parts[0]
+			if _, exists := providerModels[provider]; !exists {
+				providers = append(providers, provider)
+			}
+			providerModels[provider] = append(providerModels[provider], m)
+		}
+	}
+
+	// Add sections for each provider
+	for _, provider := range providers {
+		// Add provider header
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  strings.ToUpper(provider),
+			IsHeader: true,
+		})
+
+		// Add models for this provider
+		for _, m := range providerModels[provider] {
+			options = append(options, SelectOption{
+				ID:      m,
+				Display: formatModelDisplay(m, false), // Don't show provider for grouped models
+			})
+		}
+
+		// Add empty line between providers
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  "",
+			IsHeader: true,
+		})
+	}
+
+	return options
+}
 
 // RunInteractiveConfig runs an interactive configuration wizard
 func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
@@ -105,29 +206,14 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 		return fmt.Errorf("no models available for the selected configuration")
 	}
 
-	// Convert models to SelectOptions with friendly display names
-	modelOptions := make([]SelectOption, len(models))
-	for i, m := range models {
-		// Parse provider.model-name format
-		parts := strings.SplitN(m, ".", 2)
-		var displayName string
-		if len(parts) == 2 {
-			// Capitalize provider name for display
-			provider := strings.Title(parts[0])
-			modelName := parts[1]
-			displayName = fmt.Sprintf("%s: %s", provider, modelName)
-		} else {
-			// Fallback if format is unexpected
-			displayName = m
-		}
-		modelOptions[i] = SelectOption{ID: m, Display: displayName}
-	}
-
 	// Step 5: Main model selection
+	// Build model options with headers for main context
+	mainModelOptions := buildModelOptions(models, "main")
+
 	selectedModel, err = InteractiveSelect(
 		"Select Main Model",
 		"Type to filter models...",
-		modelOptions,
+		mainModelOptions,
 		selectedModel,
 	)
 	if err != nil {
@@ -135,10 +221,13 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 	}
 
 	// Step 6: Fast model selection
+	// Build model options with headers for fast context
+	fastModelOptions := buildModelOptions(models, "fast")
+
 	selectedFastModel, err = InteractiveSelect(
 		"Select Fast Model",
 		"Type to filter models...",
-		modelOptions,
+		fastModelOptions,
 		selectedFastModel,
 	)
 	if err != nil {
