@@ -33,7 +33,7 @@ func Launch(cfg *config.Config, mainModelID, fastModelID string, profileName str
 	env = append(env,
 		"CLAUDE_CODE_USE_BEDROCK=1",
 		fmt.Sprintf("ANTHROPIC_MODEL=%s", mainModelID),
-		fmt.Sprintf("ANTHROPIC_SMALL_FAST_MODEL=%s", fastModelID),
+		fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", fastModelID),
 		fmt.Sprintf("AWS_PROFILE=%s", cfg.Profile),
 		fmt.Sprintf("AWS_REGION=%s", cfg.Region),
 	)

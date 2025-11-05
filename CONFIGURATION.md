@@ -327,7 +327,7 @@ When launching Claude Code, `clauderock` sets these environment variables:
 ```bash
 CLAUDE_CODE_USE_BEDROCK=1
 ANTHROPIC_MODEL=<matched-model-profile-id>
-ANTHROPIC_SMALL_FAST_MODEL=<matched-fast-model-profile-id>
+ANTHROPIC_DEFAULT_HAIKU_MODEL=<matched-fast-model-profile-id>
 AWS_PROFILE=<your-profile>
 AWS_REGION=<your-region>
 ```

@@ -143,7 +143,7 @@ When launching Claude Code:
 ```bash
 CLAUDE_CODE_USE_BEDROCK=1
 ANTHROPIC_MODEL={full-profile-id}
-ANTHROPIC_SMALL_FAST_MODEL={full-profile-id}
+ANTHROPIC_DEFAULT_HAIKU_MODEL={full-profile-id}
 AWS_PROFILE={aws-profile}
 AWS_REGION={region}
 ```
