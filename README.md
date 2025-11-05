@@ -69,8 +69,9 @@ Settings are stored in profiles at `~/.clauderock/profiles/`:
 | `profile` | AWS profile name | `production` |
 | `region` | AWS region | `us-east-1` |
 | `cross-region` | Geography for routing | `us`, `eu`, `global` |
-| `model` | Main model | `anthropic.claude-sonnet-4-5` |
-| `fast-model` | Fast model | `anthropic.claude-haiku-4-5` |
+| `model` | Main/default model | `anthropic.claude-sonnet-4-5` |
+| `fast-model` | Fast model for quick operations | `anthropic.claude-haiku-4-5` |
+| `heavy-model` | Heavy model for complex tasks | `anthropic.claude-opus-4-1` |
 
 ```bash
 clauderock manage config                    # Interactive configuration
@@ -95,7 +96,7 @@ clauderock --clauderock-profile work-prod   # Use specific profile for one run
 # Launch Claude Code
 clauderock                                        # Use current profile
 clauderock --clauderock-profile work-dev          # Use specific profile
-clauderock --clauderock-model anthropic.claude-opus-4  # Override model
+clauderock --clauderock-heavy-model <full-profile-id>  # Override heavy model
 
 # Pass Claude CLI flags
 clauderock --resume                               # Resume last session
@@ -136,8 +137,9 @@ clauderock manage version                         # Show version
 Override any setting for a single run without changing your saved profile:
 
 ```bash
-clauderock --clauderock-model anthropic.claude-opus-4
+clauderock --clauderock-model anthropic.claude-sonnet-4-5
 clauderock --clauderock-fast-model anthropic.claude-haiku-4-5
+clauderock --clauderock-heavy-model anthropic.claude-opus-4-1
 clauderock --clauderock-aws-profile production
 clauderock --clauderock-region us-west-2
 clauderock --clauderock-cross-region us
