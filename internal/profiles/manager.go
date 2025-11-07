@@ -9,6 +9,7 @@ import (
 
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"github.com/OlaHulleberg/clauderock/internal/keyring"
 )
 
 type Manager struct {
@@ -100,7 +101,7 @@ func (m *Manager) Save(name string, cfg *config.Config) error {
 	return nil
 }
 
-// Delete removes a profile
+// Delete removes a profile and its associated keychain entry (if API profile)
 func (m *Manager) Delete(name string) error {
 	if name == "default" {
 		return fmt.Errorf("cannot delete default profile")
@@ -109,6 +110,20 @@ func (m *Manager) Delete(name string) error {
 	current, _ := m.GetCurrent()
 	if current == name {
 		return fmt.Errorf("cannot delete active profile, switch to another profile first")
+	}
+
+	// Load profile to check if it has a keychain entry
+	cfg, err := m.Load(name)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load profile for cleanup: %w", err)
+	}
+
+	// If it's an API profile, delete the keychain entry
+	if cfg != nil && cfg.ProfileType == "api" && cfg.APIKeyID != "" {
+		if err := keyring.Delete(cfg.APIKeyID); err != nil {
+			// Log warning but don't fail deletion
+			fmt.Printf("Warning: failed to delete keychain entry: %v\n", err)
+		}
 	}
 
 	path := m.profilePath(name)
@@ -204,6 +219,11 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return nil, fmt.Errorf("failed to migrate config to v0.5.0: %w\nPlease run: clauderock manage config", err)
 	}
 
+	// Migrate to v0.6.0 format (add profile type) if needed
+	if err := m.MigrateToV060(current, cfg); err != nil {
+		return nil, fmt.Errorf("failed to migrate config to v0.6.0: %w\nPlease run: clauderock manage config", err)
+	}
+
 	return cfg, nil
 }
 
@@ -239,7 +259,7 @@ func (m *Manager) Rename(oldName, newName string) error {
 	return nil
 }
 
-// Copy creates a copy of a profile with a new name
+// Copy creates a copy of a profile with a new name, including keychain entry for API profiles
 func (m *Manager) Copy(sourceName, destName string) error {
 	if !m.Exists(sourceName) {
 		return fmt.Errorf("profile '%s' does not exist", sourceName)
@@ -252,6 +272,29 @@ func (m *Manager) Copy(sourceName, destName string) error {
 	cfg, err := m.Load(sourceName)
 	if err != nil {
 		return err
+	}
+
+	// If it's an API profile, duplicate the keychain entry with a new ID
+	if cfg.ProfileType == "api" && cfg.APIKeyID != "" {
+		// Get the API key from keychain
+		apiKey, err := keyring.Get(cfg.APIKeyID)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve API key from keychain: %w", err)
+		}
+
+		// Generate new ID for the copy
+		newID, err := keyring.GenerateID()
+		if err != nil {
+			return fmt.Errorf("failed to generate new keychain ID: %w", err)
+		}
+
+		// Store with new ID
+		if err := keyring.Store(newID, apiKey); err != nil {
+			return fmt.Errorf("failed to store API key in keychain: %w", err)
+		}
+
+		// Update config with new ID
+		cfg.APIKeyID = newID
 	}
 
 	return m.Save(destName, cfg)
@@ -377,6 +420,27 @@ func (m *Manager) MigrateModelsToV050(profileName string, cfg *config.Config) er
 	return nil
 }
 
+// MigrateToV060 adds ProfileType field if missing
+func (m *Manager) MigrateToV060(profileName string, cfg *config.Config) error {
+	// If ProfileType is already set, no migration needed
+	if cfg.ProfileType != "" {
+		return nil
+	}
+
+	fmt.Println("Upgrading config to add profile type...")
+
+	// Default to bedrock for backward compatibility
+	cfg.ProfileType = "bedrock"
+
+	// Save updated config
+	if err := m.Save(profileName, cfg); err != nil {
+		return fmt.Errorf("failed to save migrated config: %w", err)
+	}
+
+	fmt.Printf("✓ Added profile type support (set to bedrock)\n")
+	return nil
+}
+
 // Helper functions
 
 func (m *Manager) ensureBaseDir() error {
@@ -400,6 +464,7 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 
 	cfg := &config.Config{
 		Version:     cfgVersion,
+		ProfileType: "bedrock", // Default to bedrock for backward compatibility
 		Profile:     "default",
 		Region:      "us-east-1",
 		CrossRegion: "global",

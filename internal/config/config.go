@@ -11,12 +11,21 @@ import (
 
 type Config struct {
 	Version     string `json:"version"`
-	Profile     string `json:"profile"`
-	Region      string `json:"region"`
-	CrossRegion string `json:"cross-region"`
-	Model       string `json:"model"`
-	FastModel   string `json:"fast-model"`
-	HeavyModel  string `json:"heavy-model"`
+	ProfileType string `json:"profile-type"` // "bedrock" or "api"
+
+	// Bedrock-specific fields (only used when ProfileType == "bedrock")
+	Profile     string `json:"profile,omitempty"`
+	Region      string `json:"region,omitempty"`
+	CrossRegion string `json:"cross-region,omitempty"`
+
+	// API-specific fields (only used when ProfileType == "api")
+	BaseURL  string `json:"base-url,omitempty"`
+	APIKeyID string `json:"api-key-id,omitempty"` // Keychain reference, not raw key
+
+	// Model fields (used by both types)
+	Model      string `json:"model"`
+	FastModel  string `json:"fast-model"`
+	HeavyModel string `json:"heavy-model"`
 }
 
 var validCrossRegions = map[string]bool{
@@ -104,6 +113,12 @@ func (c *Config) migrate(currentVersion string) bool {
 		migrated = true
 	}
 
+	// Migration for v0.6.0: Add profile type field
+	if compareVersions(c.Version, "0.6.0") < 0 {
+		c.migrateToV060()
+		migrated = true
+	}
+
 	// Update version to current binary version
 	if migrated {
 		c.Version = currentVersion
@@ -116,6 +131,17 @@ func (c *Config) migrate(currentVersion string) bool {
 func (c *Config) migrateToV020() {
 	c.Model = migrateModelFormat(c.Model)
 	c.FastModel = migrateModelFormat(c.FastModel)
+}
+
+// migrateToV060 sets ProfileType to "bedrock" for existing configs
+func (c *Config) migrateToV060() {
+	// If ProfileType is already set, don't override
+	if c.ProfileType != "" {
+		return
+	}
+
+	// Default to bedrock for backward compatibility
+	c.ProfileType = "bedrock"
 }
 
 // migrateModelFormat adds provider prefix to model name if missing
@@ -171,6 +197,7 @@ func Load(currentVersion string) (*Config, error) {
 
 		cfg := &Config{
 			Version:     version,
+			ProfileType: "bedrock", // Default to bedrock for backward compatibility
 			Profile:     "default",
 			Region:      "us-east-1",
 			CrossRegion: "global",
@@ -226,18 +253,35 @@ func (c *Config) Save() error {
 }
 
 func (c *Config) Validate() error {
-	if c.Profile == "" {
-		return fmt.Errorf("profile is required")
+	// Validate ProfileType
+	if c.ProfileType != "bedrock" && c.ProfileType != "api" {
+		return fmt.Errorf("profile-type must be either 'bedrock' or 'api'")
 	}
-	if c.Region == "" {
-		return fmt.Errorf("region is required")
+
+	// Validate based on profile type
+	if c.ProfileType == "bedrock" {
+		if c.Profile == "" {
+			return fmt.Errorf("profile is required for bedrock profile type")
+		}
+		if c.Region == "" {
+			return fmt.Errorf("region is required for bedrock profile type")
+		}
+		if c.CrossRegion == "" {
+			return fmt.Errorf("cross-region is required for bedrock profile type")
+		}
+		if !validCrossRegions[c.CrossRegion] {
+			return fmt.Errorf("invalid cross-region: %s (must be one of: us, eu, global)", c.CrossRegion)
+		}
+	} else if c.ProfileType == "api" {
+		if c.BaseURL == "" {
+			return fmt.Errorf("base-url is required for api profile type")
+		}
+		if c.APIKeyID == "" {
+			return fmt.Errorf("api-key-id is required for api profile type")
+		}
 	}
-	if c.CrossRegion == "" {
-		return fmt.Errorf("cross-region is required")
-	}
-	if !validCrossRegions[c.CrossRegion] {
-		return fmt.Errorf("invalid cross-region: %s (must be one of: us, eu, global)", c.CrossRegion)
-	}
+
+	// Models are required for both profile types
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
@@ -247,11 +291,17 @@ func (c *Config) Validate() error {
 	if c.HeavyModel == "" {
 		return fmt.Errorf("heavy-model is required")
 	}
+
 	return nil
 }
 
 func (c *Config) Set(key, value string) error {
 	switch key {
+	case "profile-type":
+		if value != "bedrock" && value != "api" {
+			return fmt.Errorf("profile-type must be either 'bedrock' or 'api'")
+		}
+		c.ProfileType = value
 	case "profile":
 		c.Profile = value
 	case "region":
@@ -261,6 +311,10 @@ func (c *Config) Set(key, value string) error {
 			return fmt.Errorf("invalid cross-region: %s (must be one of: us, eu, global)", value)
 		}
 		c.CrossRegion = value
+	case "base-url":
+		c.BaseURL = value
+	case "api-key-id":
+		c.APIKeyID = value
 	case "model":
 		c.Model = value
 	case "fast-model":
@@ -275,12 +329,18 @@ func (c *Config) Set(key, value string) error {
 
 func (c *Config) Get(key string) (string, error) {
 	switch key {
+	case "profile-type":
+		return c.ProfileType, nil
 	case "profile":
 		return c.Profile, nil
 	case "region":
 		return c.Region, nil
 	case "cross-region":
 		return c.CrossRegion, nil
+	case "base-url":
+		return c.BaseURL, nil
+	case "api-key-id":
+		return c.APIKeyID, nil
 	case "model":
 		return c.Model, nil
 	case "fast-model":

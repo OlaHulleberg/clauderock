@@ -6,12 +6,14 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/OlaHulleberg/clauderock/internal/api"
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"github.com/OlaHulleberg/clauderock/internal/keyring"
 	"github.com/OlaHulleberg/clauderock/internal/usage"
 )
 
-// Launch executes Claude Code with the proper environment variables for Bedrock
+// Launch executes Claude Code with the proper environment variables (Bedrock or API)
 func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, profileName string, args []string) error {
 	// Get current working directory for session tracking
 	cwd, err := os.Getwd()
@@ -28,16 +30,50 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 		return fmt.Errorf("claude binary not found in PATH: %w", err)
 	}
 
-	// Prepare environment variables
+	// Prepare environment variables based on profile type
 	env := os.Environ()
-	env = append(env,
-		"CLAUDE_CODE_USE_BEDROCK=1",
-		fmt.Sprintf("ANTHROPIC_DEFAULT_SONNET_MODEL=%s", mainModelID),
-		fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", fastModelID),
-		fmt.Sprintf("ANTHROPIC_DEFAULT_OPUS_MODEL=%s", heavyModelID),
-		fmt.Sprintf("AWS_PROFILE=%s", cfg.Profile),
-		fmt.Sprintf("AWS_REGION=%s", cfg.Region),
-	)
+
+	// Setup validation channel
+	validationDone := make(chan error, 1)
+
+	if cfg.ProfileType == "bedrock" {
+		// Bedrock mode: Use AWS credentials
+		env = append(env,
+			"CLAUDE_CODE_USE_BEDROCK=1",
+			fmt.Sprintf("ANTHROPIC_DEFAULT_SONNET_MODEL=%s", mainModelID),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", fastModelID),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_OPUS_MODEL=%s", heavyModelID),
+			fmt.Sprintf("AWS_PROFILE=%s", cfg.Profile),
+			fmt.Sprintf("AWS_REGION=%s", cfg.Region),
+		)
+
+		// Validate model profile IDs in background
+		go func() {
+			validationDone <- aws.ValidateProfileIDs(cfg.Profile, cfg.Region, mainModelID, fastModelID, heavyModelID)
+		}()
+
+	} else if cfg.ProfileType == "api" {
+		// API mode: Use API key from keychain
+		apiKey, err := keyring.Get(cfg.APIKeyID)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve API key from keychain: %w", err)
+		}
+
+		// Normalize base URL
+		normalizedURL := api.NormalizeBaseURL(cfg.BaseURL)
+
+		env = append(env,
+			fmt.Sprintf("ANTHROPIC_API_KEY=%s", apiKey),
+			fmt.Sprintf("ANTHROPIC_BASE_URL=%s", normalizedURL),
+		)
+
+		// Validate models via API in background
+		go func() {
+			validationDone <- api.ValidateModels(cfg.BaseURL, apiKey, mainModelID, fastModelID, heavyModelID)
+		}()
+	} else {
+		return fmt.Errorf("unsupported profile type: %s", cfg.ProfileType)
+	}
 
 	// Execute claude with passthrough args
 	cmd := exec.Command(claudePath, args...)
@@ -50,12 +86,6 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start claude: %w", err)
 	}
-
-	// Validate model profile IDs in background
-	validationDone := make(chan error, 1)
-	go func() {
-		validationDone <- aws.ValidateProfileIDs(cfg.Profile, cfg.Region, mainModelID, fastModelID, heavyModelID)
-	}()
 
 	// Wait for either validation to complete or Claude Code to exit
 	cmdDone := make(chan error, 1)

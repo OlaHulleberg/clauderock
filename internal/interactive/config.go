@@ -2,11 +2,14 @@ package interactive
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/OlaHulleberg/clauderock/internal/api"
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/awsutil"
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"github.com/OlaHulleberg/clauderock/internal/keyring"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -135,6 +138,38 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 		return fmt.Errorf("failed to get current profile: %w", err)
 	}
 
+	// Step 0: Profile Type Selection
+	profileTypeOptions := []SelectOption{
+		{ID: "bedrock", Display: "AWS Bedrock (Cross-region inference)"},
+		{ID: "api", Display: "API Key (Direct API access)"},
+	}
+
+	selectedProfileType, err := InteractiveSelect(
+		"Select Profile Type",
+		"Choose authentication method...",
+		profileTypeOptions,
+		cfg.ProfileType,
+	)
+	if err != nil {
+		return fmt.Errorf("profile type selection failed: %w", err)
+	}
+
+	cfg.ProfileType = selectedProfileType
+
+	// Branch based on profile type
+	if selectedProfileType == "bedrock" {
+		return runBedrockConfig(cfg, manager, currentProfile)
+	} else if selectedProfileType == "api" {
+		return runAPIConfig(cfg, manager, currentProfile)
+	}
+
+	return fmt.Errorf("unsupported profile type: %s", selectedProfileType)
+}
+
+// runBedrockConfig handles the Bedrock configuration flow
+func runBedrockConfig(cfg *config.Config, manager interface {
+	Save(name string, cfg *config.Config) error
+}, currentProfile string) error {
 	// Variables to hold user selections
 	var (
 		selectedProfile     string
@@ -293,4 +328,209 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 	fmt.Printf("  Heavy Model:  %s\n", cfg.HeavyModel)
 
 	return nil
+}
+
+// runAPIConfig handles the API key configuration flow
+func runAPIConfig(cfg *config.Config, manager interface {
+	Save(name string, cfg *config.Config) error
+}, currentProfile string) error {
+	// Step 1: Base URL Input
+	fmt.Println("\nEnter the base URL for your API gateway:")
+	fmt.Println("Examples: api.example.com, https://api.example.com, http://localhost:8080")
+	fmt.Print("> ")
+
+	var baseURL string
+	if _, err := fmt.Scanln(&baseURL); err != nil {
+		return fmt.Errorf("failed to read base URL: %w", err)
+	}
+
+	if baseURL == "" {
+		return fmt.Errorf("base URL cannot be empty")
+	}
+
+	// Normalize the base URL
+	cfg.BaseURL = baseURL
+
+	// Step 2: API Key Input
+	fmt.Println("\nEnter your API key:")
+	fmt.Println("(This will be stored securely in your system keychain)")
+
+	// Check environment variable first
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey != "" {
+		fmt.Println("\nFound ANTHROPIC_API_KEY in environment.")
+		useEnvKey, err := Confirm(
+			"API Key Detected",
+			"Found ANTHROPIC_API_KEY in environment. Do you want to use it?",
+			nil,
+		)
+		if err != nil {
+			return fmt.Errorf("confirmation failed: %w", err)
+		}
+
+		if !useEnvKey {
+			apiKey = ""
+		}
+	}
+
+	// Prompt for API key if not using environment variable
+	if apiKey == "" {
+		fmt.Print("> ")
+		if _, err := fmt.Scanln(&apiKey); err != nil {
+			return fmt.Errorf("failed to read API key: %w", err)
+		}
+
+		if apiKey == "" {
+			return fmt.Errorf("API key cannot be empty")
+		}
+	}
+
+	// Step 3: Fetch available models
+	fmt.Println("\nFetching available models from API...")
+	models, err := api.FetchAvailableModels(cfg.BaseURL, apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to fetch models: %w", err)
+	}
+
+	if len(models) == 0 {
+		return fmt.Errorf("no models available from API")
+	}
+
+	// Extract model IDs for selection
+	modelIDs := make([]string, len(models))
+	for i, m := range models {
+		modelIDs[i] = m.ID
+	}
+
+	// Step 4: Main model selection
+	mainModelOptions := buildAPIModelOptions(models, "main")
+	selectedModel, err := InteractiveSelect(
+		"Select Main Model",
+		"Type to filter models...",
+		mainModelOptions,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("main model selection failed: %w", err)
+	}
+
+	// Step 5: Fast model selection
+	fastModelOptions := buildAPIModelOptions(models, "fast")
+	selectedFastModel, err := InteractiveSelect(
+		"Select Fast Model",
+		"Type to filter models...",
+		fastModelOptions,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("fast model selection failed: %w", err)
+	}
+
+	// Step 6: Heavy model selection
+	heavyModelOptions := buildAPIModelOptions(models, "heavy")
+	selectedHeavyModel, err := InteractiveSelect(
+		"Select Heavy Model",
+		"Type to filter models...",
+		heavyModelOptions,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("heavy model selection failed: %w", err)
+	}
+
+	// Step 7: Store API key in keychain
+	keyID, err := keyring.GenerateID()
+	if err != nil {
+		return fmt.Errorf("failed to generate keychain ID: %w", err)
+	}
+
+	if err := keyring.Store(keyID, apiKey); err != nil {
+		return fmt.Errorf("failed to store API key in keychain: %w", err)
+	}
+
+	// Update configuration
+	cfg.APIKeyID = keyID
+	cfg.Model = selectedModel
+	cfg.FastModel = selectedFastModel
+	cfg.HeavyModel = selectedHeavyModel
+
+	// Clear Bedrock-specific fields
+	cfg.Profile = ""
+	cfg.Region = ""
+	cfg.CrossRegion = ""
+
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		// Clean up keychain entry if validation fails
+		keyring.Delete(keyID)
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	// Save configuration to current profile
+	if err := manager.Save(currentProfile, cfg); err != nil {
+		// Clean up keychain entry if save fails
+		keyring.Delete(keyID)
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("\n✓ Configuration saved successfully to profile '%s'!\n", currentProfile)
+	fmt.Printf("\nConfiguration:\n")
+	fmt.Printf("  Profile Type: %s\n", cfg.ProfileType)
+	fmt.Printf("  Base URL:     %s\n", cfg.BaseURL)
+	fmt.Printf("  Model:        %s\n", cfg.Model)
+	fmt.Printf("  Fast Model:   %s\n", cfg.FastModel)
+	fmt.Printf("  Heavy Model:  %s\n", cfg.HeavyModel)
+
+	return nil
+}
+
+// buildAPIModelOptions creates SelectOptions for API models
+func buildAPIModelOptions(models []api.ModelInfo, context string) []SelectOption {
+	var options []SelectOption
+
+	// Add "Recommended" section
+	var recommendedModel *api.ModelInfo
+	for i, m := range models {
+		if api.IsRecommendedModel(m.ID, context) {
+			recommendedModel = &models[i]
+			break
+		}
+	}
+
+	if recommendedModel != nil {
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  recommendedSectionHeader,
+			IsHeader: true,
+		})
+		options = append(options, SelectOption{
+			ID:      recommendedModel.ID,
+			Display: fmt.Sprintf("  ⭐ %s", recommendedModel.Name),
+		})
+		options = append(options, SelectOption{
+			ID:       "",
+			Display:  "",
+			IsHeader: true,
+		})
+	}
+
+	// Add all models
+	options = append(options, SelectOption{
+		ID:       "",
+		Display:  "ALL MODELS",
+		IsHeader: true,
+	})
+
+	for _, m := range models {
+		// Skip if already shown in recommended
+		if recommendedModel != nil && m.ID == recommendedModel.ID {
+			continue
+		}
+		options = append(options, SelectOption{
+			ID:      m.ID,
+			Display: fmt.Sprintf("  %s", m.Name),
+		})
+	}
+
+	return options
 }

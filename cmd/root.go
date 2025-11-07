@@ -7,6 +7,7 @@ import (
 
 	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
+	"github.com/OlaHulleberg/clauderock/internal/keyring"
 	"github.com/OlaHulleberg/clauderock/internal/launcher"
 	"github.com/OlaHulleberg/clauderock/internal/profiles"
 	"github.com/OlaHulleberg/clauderock/internal/updater"
@@ -14,14 +15,17 @@ import (
 )
 
 var (
-	clauderockProfileFlag     string
-	clauderockModelFlag       string
-	clauderockFastModelFlag   string
-	clauderockHeavyModelFlag  string
-	clauderockAWSProfileFlag  string
-	clauderockRegionFlag      string
-	clauderockCrossRegionFlag string
-	Version                   = "dev"
+	clauderockProfileFlag      string
+	clauderockProfileTypeFlag  string
+	clauderockModelFlag        string
+	clauderockFastModelFlag    string
+	clauderockHeavyModelFlag   string
+	clauderockAWSProfileFlag   string
+	clauderockRegionFlag       string
+	clauderockCrossRegionFlag  string
+	clauderockBaseURLFlag      string
+	clauderockAPIKeyFlag       string
+	Version                    = "dev"
 )
 
 var rootCmd = &cobra.Command{
@@ -39,12 +43,15 @@ func Execute() {
 
 func init() {
 	rootCmd.Flags().StringVar(&clauderockProfileFlag, "clauderock-profile", "", "Use a specific clauderock profile for this run")
+	rootCmd.Flags().StringVar(&clauderockProfileTypeFlag, "clauderock-profile-type", "", "Override profile type for this run (bedrock or api)")
 	rootCmd.Flags().StringVar(&clauderockModelFlag, "clauderock-model", "", "Override main model for this run")
 	rootCmd.Flags().StringVar(&clauderockFastModelFlag, "clauderock-fast-model", "", "Override fast model for this run")
 	rootCmd.Flags().StringVar(&clauderockHeavyModelFlag, "clauderock-heavy-model", "", "Override heavy model for this run")
-	rootCmd.Flags().StringVar(&clauderockAWSProfileFlag, "clauderock-aws-profile", "", "Override AWS profile for this run")
-	rootCmd.Flags().StringVar(&clauderockRegionFlag, "clauderock-region", "", "Override AWS region for this run")
-	rootCmd.Flags().StringVar(&clauderockCrossRegionFlag, "clauderock-cross-region", "", "Override cross-region setting for this run")
+	rootCmd.Flags().StringVar(&clauderockAWSProfileFlag, "clauderock-aws-profile", "", "Override AWS profile for this run (bedrock only)")
+	rootCmd.Flags().StringVar(&clauderockRegionFlag, "clauderock-region", "", "Override AWS region for this run (bedrock only)")
+	rootCmd.Flags().StringVar(&clauderockCrossRegionFlag, "clauderock-cross-region", "", "Override cross-region setting for this run (bedrock only)")
+	rootCmd.Flags().StringVar(&clauderockBaseURLFlag, "clauderock-base-url", "", "Override base URL for this run (api only)")
+	rootCmd.Flags().StringVar(&clauderockAPIKeyFlag, "clauderock-api-key", "", "Override API key for this run (api only, ephemeral)")
 
 	// Allow unknown flags to pass through to Claude CLI
 	rootCmd.FParseErrWhitelist.UnknownFlags = true
@@ -81,35 +88,83 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Apply overrides from flags
 	hasOverrides := false
+
+	// Profile type override
+	if clauderockProfileTypeFlag != "" {
+		if clauderockProfileTypeFlag != "bedrock" && clauderockProfileTypeFlag != "api" {
+			return fmt.Errorf("--clauderock-profile-type must be either 'bedrock' or 'api'")
+		}
+		cfg.ProfileType = clauderockProfileTypeFlag
+		hasOverrides = true
+	}
+
+	// Bedrock-specific overrides
 	if clauderockAWSProfileFlag != "" {
+		if cfg.ProfileType != "bedrock" {
+			return fmt.Errorf("--clauderock-aws-profile can only be used with bedrock profile type")
+		}
 		cfg.Profile = clauderockAWSProfileFlag
 		hasOverrides = true
 	}
 	if clauderockRegionFlag != "" {
+		if cfg.ProfileType != "bedrock" {
+			return fmt.Errorf("--clauderock-region can only be used with bedrock profile type")
+		}
 		cfg.Region = clauderockRegionFlag
 		hasOverrides = true
 	}
 	if clauderockCrossRegionFlag != "" {
+		if cfg.ProfileType != "bedrock" {
+			return fmt.Errorf("--clauderock-cross-region can only be used with bedrock profile type")
+		}
 		cfg.CrossRegion = clauderockCrossRegionFlag
 		hasOverrides = true
 	}
+
+	// API-specific overrides
+	if clauderockBaseURLFlag != "" {
+		if cfg.ProfileType != "api" {
+			return fmt.Errorf("--clauderock-base-url can only be used with api profile type")
+		}
+		cfg.BaseURL = clauderockBaseURLFlag
+		hasOverrides = true
+	}
+	if clauderockAPIKeyFlag != "" {
+		if cfg.ProfileType != "api" {
+			return fmt.Errorf("--clauderock-api-key can only be used with api profile type")
+		}
+		// For API key override, we need to create a temporary keyring entry
+		tempKeyID, err := keyring.GenerateID()
+		if err != nil {
+			return fmt.Errorf("failed to generate temporary key ID: %w", err)
+		}
+		if err := keyring.Store(tempKeyID, clauderockAPIKeyFlag); err != nil {
+			return fmt.Errorf("failed to store temporary API key: %w", err)
+		}
+		// Note: This temporary key will remain in keyring, but that's acceptable for ephemeral use
+		cfg.APIKeyID = tempKeyID
+		hasOverrides = true
+	}
+
+	// Model overrides (works for both profile types)
 	if clauderockModelFlag != "" {
-		if !aws.IsFullProfileID(clauderockModelFlag) {
-			return fmt.Errorf("--clauderock-model must be a full profile ID (e.g., 'global.anthropic.claude-sonnet-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
+		// For bedrock, validate it's a full profile ID
+		if cfg.ProfileType == "bedrock" && !aws.IsFullProfileID(clauderockModelFlag) {
+			return fmt.Errorf("--clauderock-model must be a full profile ID for bedrock (e.g., 'global.anthropic.claude-sonnet-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
 		}
 		cfg.Model = clauderockModelFlag
 		hasOverrides = true
 	}
 	if clauderockFastModelFlag != "" {
-		if !aws.IsFullProfileID(clauderockFastModelFlag) {
-			return fmt.Errorf("--clauderock-fast-model must be a full profile ID (e.g., 'global.anthropic.claude-haiku-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
+		if cfg.ProfileType == "bedrock" && !aws.IsFullProfileID(clauderockFastModelFlag) {
+			return fmt.Errorf("--clauderock-fast-model must be a full profile ID for bedrock (e.g., 'global.anthropic.claude-haiku-4-5-20250929-v1:0')\nRun 'clauderock manage models list' to see available models")
 		}
 		cfg.FastModel = clauderockFastModelFlag
 		hasOverrides = true
 	}
 	if clauderockHeavyModelFlag != "" {
-		if !aws.IsFullProfileID(clauderockHeavyModelFlag) {
-			return fmt.Errorf("--clauderock-heavy-model must be a full profile ID (e.g., 'global.anthropic.claude-opus-4-1-20250514-v1:0')\nRun 'clauderock manage models list' to see available models")
+		if cfg.ProfileType == "bedrock" && !aws.IsFullProfileID(clauderockHeavyModelFlag) {
+			return fmt.Errorf("--clauderock-heavy-model must be a full profile ID for bedrock (e.g., 'global.anthropic.claude-opus-4-1-20250514-v1:0')\nRun 'clauderock manage models list' to see available models")
 		}
 		cfg.HeavyModel = clauderockHeavyModelFlag
 		hasOverrides = true
@@ -123,6 +178,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Show overrides if any
 	if hasOverrides {
 		fmt.Println("Using overrides:")
+		if clauderockProfileTypeFlag != "" {
+			fmt.Printf("  Profile Type: %s\n", cfg.ProfileType)
+		}
 		if clauderockAWSProfileFlag != "" {
 			fmt.Printf("  AWS Profile: %s\n", cfg.Profile)
 		}
@@ -131,6 +189,12 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 		if clauderockCrossRegionFlag != "" {
 			fmt.Printf("  Cross Region: %s\n", cfg.CrossRegion)
+		}
+		if clauderockBaseURLFlag != "" {
+			fmt.Printf("  Base URL: %s\n", cfg.BaseURL)
+		}
+		if clauderockAPIKeyFlag != "" {
+			fmt.Printf("  API Key: <provided via flag>\n")
 		}
 		if clauderockModelFlag != "" {
 			fmt.Printf("  Model: %s\n", cfg.Model)
@@ -177,13 +241,16 @@ func collectPassthroughArgs() []string {
 
 	var passthroughArgs []string
 	clauderockFlags := map[string]bool{
-		"--clauderock-profile":      true,
-		"--clauderock-model":        true,
-		"--clauderock-fast-model":   true,
-		"--clauderock-heavy-model":  true,
-		"--clauderock-aws-profile":  true,
-		"--clauderock-region":       true,
-		"--clauderock-cross-region": true,
+		"--clauderock-profile":       true,
+		"--clauderock-profile-type":  true,
+		"--clauderock-model":         true,
+		"--clauderock-fast-model":    true,
+		"--clauderock-heavy-model":   true,
+		"--clauderock-aws-profile":   true,
+		"--clauderock-region":        true,
+		"--clauderock-cross-region":  true,
+		"--clauderock-base-url":      true,
+		"--clauderock-api-key":       true,
 	}
 
 	skip := false
