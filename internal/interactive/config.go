@@ -491,7 +491,7 @@ func buildAPIModelOptions(models []api.ModelInfo, context string) []SelectOption
 	// Add "Recommended" section
 	var recommendedModel *api.ModelInfo
 	for i, m := range models {
-		if api.IsRecommendedModel(m.ID, context) {
+		if api.IsRecommendedModel(m, context) {
 			recommendedModel = &models[i]
 			break
 		}

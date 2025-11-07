@@ -11,9 +11,10 @@ import (
 
 // ModelInfo represents a model from the API
 type ModelInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Recommended []string `json:"recommended,omitempty"`
 }
 
 // ModelsResponse represents the response from /v1/models endpoint
@@ -105,23 +106,22 @@ func ValidateModels(baseURL, apiKey string, modelIDs ...string) error {
 }
 
 // IsRecommendedModel returns true if the model is recommended for the given context
-// This provides suggestions similar to the Bedrock flow
-func IsRecommendedModel(modelID, context string) bool {
-	modelID = strings.ToLower(modelID)
-
-	switch context {
-	case "main":
-		// Recommend Sonnet-class models for main work
-		return strings.Contains(modelID, "sonnet")
-	case "fast":
-		// Recommend Haiku-class models for fast operations
-		return strings.Contains(modelID, "haiku")
-	case "heavy":
-		// Recommend Opus-class models for heavy lifting
-		return strings.Contains(modelID, "opus")
-	default:
-		return false
+// Checks the model's Recommended field for matching context
+func IsRecommendedModel(model ModelInfo, context string) bool {
+	// Map clauderock context to API context names
+	contextMap := map[string]string{
+		"main":  "code",
+		"fast":  "code-fast",
+		"heavy": "code-heavy",
 	}
+
+	apiContext := contextMap[context]
+	for _, rec := range model.Recommended {
+		if rec == apiContext {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractFriendlyName extracts a display name from the model ID
