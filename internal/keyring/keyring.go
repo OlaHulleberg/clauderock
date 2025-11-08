@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/99designs/keyring"
 )
@@ -21,7 +23,7 @@ func GenerateID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// Store saves an API key to the OS keychain with the given ID
+// Store saves an API key to encrypted file storage with the given ID
 func Store(id, apiKey string) error {
 	ring, err := openKeyring()
 	if err != nil {
@@ -40,7 +42,7 @@ func Store(id, apiKey string) error {
 	return nil
 }
 
-// Get retrieves an API key from the OS keychain by ID
+// Get retrieves an API key from encrypted file storage by ID
 func Get(id string) (string, error) {
 	ring, err := openKeyring()
 	if err != nil {
@@ -55,7 +57,7 @@ func Get(id string) (string, error) {
 	return string(item.Data), nil
 }
 
-// Delete removes an API key from the OS keychain by ID
+// Delete removes an API key from encrypted file storage by ID
 func Delete(id string) error {
 	ring, err := openKeyring()
 	if err != nil {
@@ -73,16 +75,31 @@ func Delete(id string) error {
 	return nil
 }
 
-// openKeyring opens the OS keyring with appropriate backends
+// openKeyring opens the file-based keyring with machine-specific encryption
 func openKeyring() (keyring.Keyring, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	fileDir := filepath.Join(home, ".clauderock", "keyring")
+
 	return keyring.Open(keyring.Config{
 		ServiceName: serviceName,
-		// Allow multiple backends for cross-platform support
+		FileDir:     fileDir,
+		FilePasswordFunc: func(prompt string) (string, error) {
+			// Derive password from machine-specific data
+			// This prevents keyring file from being portable across machines
+			hostname, _ := os.Hostname()
+			username := os.Getenv("USER")
+			if username == "" {
+				username = os.Getenv("USERNAME") // Windows
+			}
+			return fmt.Sprintf("clauderock-%s-%s", hostname, username), nil
+		},
+		// Only use file backend (pure Go, no CGO)
 		AllowedBackends: []keyring.BackendType{
-			keyring.KeychainBackend,     // macOS
-			keyring.SecretServiceBackend, // Linux
-			keyring.WinCredBackend,       // Windows
-			keyring.FileBackend,          // Fallback (encrypted file)
+			keyring.FileBackend,
 		},
 	})
 }

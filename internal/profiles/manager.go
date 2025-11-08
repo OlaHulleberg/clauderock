@@ -101,7 +101,7 @@ func (m *Manager) Save(name string, cfg *config.Config) error {
 	return nil
 }
 
-// Delete removes a profile and its associated keychain entry (if API profile)
+// Delete removes a profile and its associated keyring entry (if API profile)
 func (m *Manager) Delete(name string) error {
 	if name == "default" {
 		return fmt.Errorf("cannot delete default profile")
@@ -112,17 +112,17 @@ func (m *Manager) Delete(name string) error {
 		return fmt.Errorf("cannot delete active profile, switch to another profile first")
 	}
 
-	// Load profile to check if it has a keychain entry
+	// Load profile to check if it has a keyring entry
 	cfg, err := m.Load(name)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to load profile for cleanup: %w", err)
 	}
 
-	// If it's an API profile, delete the keychain entry
+	// If it's an API profile, delete the keyring entry
 	if cfg != nil && cfg.ProfileType == "api" && cfg.APIKeyID != "" {
 		if err := keyring.Delete(cfg.APIKeyID); err != nil {
 			// Log warning but don't fail deletion
-			fmt.Printf("Warning: failed to delete keychain entry: %v\n", err)
+			fmt.Printf("Warning: failed to delete keyring entry: %v\n", err)
 		}
 	}
 
@@ -265,23 +265,23 @@ func (m *Manager) Copy(sourceName, destName string) error {
 		return err
 	}
 
-	// If it's an API profile, duplicate the keychain entry with a new ID
+	// If it's an API profile, duplicate the keyring entry with a new ID
 	if cfg.ProfileType == "api" && cfg.APIKeyID != "" {
-		// Get the API key from keychain
+		// Get the API key from keyring
 		apiKey, err := keyring.Get(cfg.APIKeyID)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve API key from keychain: %w", err)
+			return fmt.Errorf("failed to retrieve API key from keyring: %w", err)
 		}
 
 		// Generate new ID for the copy
 		newID, err := keyring.GenerateID()
 		if err != nil {
-			return fmt.Errorf("failed to generate new keychain ID: %w", err)
+			return fmt.Errorf("failed to generate new keyring ID: %w", err)
 		}
 
 		// Store with new ID
 		if err := keyring.Store(newID, apiKey); err != nil {
-			return fmt.Errorf("failed to store API key in keychain: %w", err)
+			return fmt.Errorf("failed to store API key in keyring: %w", err)
 		}
 
 		// Update config with new ID

@@ -53,10 +53,10 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 		}()
 
 	} else if cfg.ProfileType == "api" {
-		// API mode: Use API key from keychain
+		// API mode: Retrieve API key from encrypted keyring
 		apiKey, err := keyring.Get(cfg.APIKeyID)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve API key from keychain: %w", err)
+			return fmt.Errorf("failed to retrieve API key from keyring: %w", err)
 		}
 
 		// Normalize base URL

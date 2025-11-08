@@ -438,14 +438,14 @@ func runAPIConfig(cfg *config.Config, manager interface {
 		return fmt.Errorf("heavy model selection failed: %w", err)
 	}
 
-	// Step 7: Store API key in keychain
+	// Generate keyring ID and store API key
 	keyID, err := keyring.GenerateID()
 	if err != nil {
-		return fmt.Errorf("failed to generate keychain ID: %w", err)
+		return fmt.Errorf("failed to generate keyring ID: %w", err)
 	}
 
 	if err := keyring.Store(keyID, apiKey); err != nil {
-		return fmt.Errorf("failed to store API key in keychain: %w", err)
+		return fmt.Errorf("failed to store API key in keyring: %w", err)
 	}
 
 	// Update configuration
@@ -461,14 +461,14 @@ func runAPIConfig(cfg *config.Config, manager interface {
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		// Clean up keychain entry if validation fails
+		// Clean up keyring entry if validation fails
 		keyring.Delete(keyID)
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Save configuration to current profile
 	if err := manager.Save(currentProfile, cfg); err != nil {
-		// Clean up keychain entry if save fails
+		// Clean up keyring entry if save fails
 		keyring.Delete(keyID)
 		return fmt.Errorf("failed to save config: %w", err)
 	}

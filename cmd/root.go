@@ -133,7 +133,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		if cfg.ProfileType != "api" {
 			return fmt.Errorf("--clauderock-api-key can only be used with api profile type")
 		}
-		// For API key override, we need to create a temporary keyring entry
+		// For API key override, create a temporary keyring entry
 		tempKeyID, err := keyring.GenerateID()
 		if err != nil {
 			return fmt.Errorf("failed to generate temporary key ID: %w", err)

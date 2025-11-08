@@ -20,7 +20,7 @@ type Config struct {
 
 	// API-specific fields (only used when ProfileType == "api")
 	BaseURL  string `json:"base-url,omitempty"`
-	APIKeyID string `json:"api-key-id,omitempty"` // Keychain reference, not raw key
+	APIKeyID string `json:"api-key-id,omitempty"` // Reference to encrypted keyring entry
 
 	// Model fields (used by both types)
 	Model      string `json:"model"`
