@@ -26,12 +26,14 @@ curl -fsSL https://raw.githubusercontent.com/OlaHulleberg/clauderock/main/instal
 ## Quick Start
 
 ```bash
-# Interactive setup (choose AWS Bedrock or API)
-clauderock manage config
-
-# Launch Claude Code
+# Launch clauderock (interactive setup runs automatically on first use)
 clauderock
 ```
+
+On first run, clauderock will guide you through configuration:
+- Choose profile type (AWS Bedrock or API)
+- Enter credentials (AWS profile or API key)
+- Select models (main/fast/heavy)
 
 ## Configuration
 
@@ -40,9 +42,10 @@ Profiles stored at `~/.clauderock/profiles/`. Each profile is either:
 - **API**: Custom endpoint with API key
 
 ```bash
-clauderock manage config                # Interactive wizard
-clauderock manage config list           # View settings
-clauderock manage profiles              # List profiles
+clauderock manage config                # Interactive wizard (full setup)
+clauderock manage config models         # Change models only
+clauderock manage config list           # View current settings
+clauderock manage profiles              # List all profiles
 clauderock manage config switch <name>  # Switch profile
 ```
 
@@ -50,21 +53,23 @@ clauderock manage config switch <name>  # Switch profile
 
 ```bash
 # Launch
-clauderock                              # Use current profile
+clauderock                              # Use current profile (auto-setup on first run)
 clauderock --clauderock-profile work    # Use specific profile
 
 # Claude CLI passthrough (all flags pass through)
 clauderock --resume                     # Resume last session
 clauderock --debug                      # Debug mode
 
-# Management
-clauderock manage config                # Interactive wizard
-clauderock manage profiles              # List profiles
-clauderock manage models list           # List models (Bedrock only)
-clauderock manage stats                 # Usage statistics
+# Configuration
+clauderock manage config                # Interactive wizard (full setup)
+clauderock manage config models         # Change models only
+clauderock manage config list           # View current settings
+clauderock manage profiles              # List all profiles
 
-# Updates
-clauderock manage update                # Update to latest
+# Management
+clauderock manage models list           # List available models (Bedrock only)
+clauderock manage stats                 # Usage statistics
+clauderock manage update                # Update to latest version
 clauderock manage version               # Show version
 ```
 
@@ -90,9 +95,10 @@ Temporary overrides without changing saved profile:
 
 ## Features
 
+- **Auto-configuration**: Interactive setup runs automatically on first launch
 - **Dual mode**: AWS Bedrock or custom API endpoints
 - **Multiple profiles**: Switch between configurations (work/personal/projects)
-- **Model selection**: Choose main/fast/heavy models per profile
+- **Model selection**: Choose main/fast/heavy models per profile (can update independently)
 - **Usage tracking**: Token metrics, TPM/RPM, cost estimates (stored locally)
 - **Secure storage**: API keys in OS keychain (macOS/Linux/Windows)
 - **Override flags**: Temporary config changes without saving
