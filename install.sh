@@ -129,20 +129,20 @@ fi
 # Verify installation
 cd - > /dev/null
 if command -v clauderock >/dev/null 2>&1; then
-    VERSION=$(clauderock version 2>&1 || echo "unknown")
+    VERSION=$(clauderock manage version 2>&1 || echo "unknown")
     echo ""
     echo -e "${GREEN}✓ clauderock installed successfully!${NC}"
     echo "  Version: $VERSION"
     echo ""
     echo "Get started:"
-    echo "  clauderock config set profile <your-aws-profile>"
-    echo "  clauderock config set region <your-aws-region>"
-    echo "  clauderock config set cross-region <us|eu|global>"
+    echo "  clauderock manage config set profile <your-aws-profile>"
+    echo "  clauderock manage config set region <your-aws-region>"
+    echo "  clauderock manage config set cross-region <us|eu|global>"
     echo "  clauderock"
 else
     echo ""
     echo -e "${YELLOW}Note: You may need to restart your shell or run:${NC}"
     echo "  export PATH=\"\$PATH:$FINAL_INSTALL_DIR\""
     echo ""
-    echo "Then verify with: clauderock version"
+    echo "Then verify with: clauderock manage version"
 fi
