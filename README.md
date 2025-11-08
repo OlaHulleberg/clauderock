@@ -100,7 +100,6 @@ Temporary overrides without changing saved profile:
 - **Multiple profiles**: Switch between configurations (work/personal/projects)
 - **Model selection**: Choose main/fast/heavy models per profile (can update independently)
 - **Usage tracking**: Token metrics, TPM/RPM, cost estimates (stored locally)
-- **Secure storage**: API keys in OS keychain (macOS/Linux/Windows)
 - **Override flags**: Temporary config changes without saving
 - **Passthrough**: All Claude CLI flags work (`--resume`, `--debug`, etc.)
 
