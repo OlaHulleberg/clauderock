@@ -88,6 +88,15 @@ func (m *Manager) Save(name string, cfg *config.Config) error {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
+	return m.saveWithoutValidation(name, cfg)
+}
+
+// saveWithoutValidation saves a config without validation (used internally)
+func (m *Manager) saveWithoutValidation(name string, cfg *config.Config) error {
+	if err := m.ensureProfilesDir(); err != nil {
+		return err
+	}
+
 	path := m.profilePath(name)
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -181,9 +190,9 @@ func (m *Manager) SetCurrent(name string) error {
 }
 
 // GetCurrentConfig loads the current active profile's configuration
-func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
-	// Check for migration first
-	if err := m.MigrateFromLegacyConfig(version); err != nil {
+func (m *Manager) GetCurrentConfig(cliVersion string) (*config.Config, error) {
+	// Check for migration from legacy config.json first
+	if err := m.MigrateFromLegacyConfig(cliVersion); err != nil {
 		return nil, fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -192,10 +201,11 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return nil, err
 	}
 
-	// If current profile doesn't exist, create default
+	// If current profile doesn't exist, create default with current CLI version
 	if !m.Exists(current) {
-		cfg := m.createDefaultConfig(version)
-		if err := m.Save(current, cfg); err != nil {
+		cfg := m.createDefaultConfig(cliVersion)
+		// Save without validation since it's an incomplete fresh install
+		if err := m.saveWithoutValidation(current, cfg); err != nil {
 			return nil, fmt.Errorf("failed to create default profile: %w", err)
 		}
 		if err := m.SetCurrent(current); err != nil {
@@ -209,10 +219,25 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return nil, err
 	}
 
-	// Run all migrations through central manager
-	migMgr := migrations.NewManager(version)
-	if err := migMgr.MigrateProfile(current, cfg, m); err != nil {
-		return nil, fmt.Errorf("failed to migrate profile: %w\nPlease run: clauderock manage config", err)
+	// Run migrations only if config version is older than CLI version
+	migMgr := migrations.NewManager(cliVersion)
+	needsMigration, err := migMgr.NeedsMigration(cfg.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	if needsMigration {
+		oldVersion := cfg.Version
+		if err := migMgr.MigrateProfile(current, oldVersion, cfg, m); err != nil {
+			return nil, fmt.Errorf("failed to migrate profile from %s to %s: %w\nPlease run: clauderock manage config", oldVersion, cliVersion, err)
+		}
+		// Update config version to current CLI version (but never "dev")
+		if cliVersion != "dev" {
+			cfg.Version = cliVersion
+			if err := m.Save(current, cfg); err != nil {
+				return nil, fmt.Errorf("failed to save migrated config: %w", err)
+			}
+		}
 	}
 
 	return cfg, nil
@@ -366,23 +391,25 @@ func (m *Manager) profilePath(name string) string {
 	return filepath.Join(m.profilesDir, name+".json")
 }
 
-func (m *Manager) createDefaultConfig(version string) *config.Config {
-	cfgVersion := version
-	if version == "dev" {
-		cfgVersion = ""
+func (m *Manager) createDefaultConfig(cliVersion string) *config.Config {
+	// Never store "dev" as version - leave empty for dev builds
+	cfgVersion := ""
+	if cliVersion != "dev" {
+		cfgVersion = cliVersion
 	}
 
 	cfg := &config.Config{
-		Version:     cfgVersion,
-		ProfileType: "bedrock", // Default to bedrock for backward compatibility
-		Profile:     "default",
+		Version:     cfgVersion, // Store CLI version (e.g., "v0.6.1") or empty for dev
+		ProfileType: "bedrock",  // Default to bedrock for backward compatibility
+		Profile:     "",         // Empty on fresh install - user must configure
 		Region:      "us-east-1",
 		CrossRegion: "global",
-		Model:       "anthropic.claude-sonnet-4-5",
-		FastModel:   "anthropic.claude-haiku-4-5",
-		HeavyModel:  "anthropic.claude-opus-4-1",
+		Model:       "",        // Empty on fresh install - user must configure
+		FastModel:   "",        // Empty on fresh install - user must configure
+		HeavyModel:  "",        // Empty on fresh install - user must configure
 	}
 
-	// Note: Migrations will resolve model names to full profile IDs when needed
+	// Note: Models are empty on fresh install to avoid migration errors
+	// User should configure AWS profile and models using: clauderock manage config
 	return cfg
 }

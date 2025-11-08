@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	Version     string `json:"version"`
+	Version     string `json:"version"`      // CLI version that last modified this config (e.g., "v0.6.1")
 	ProfileType string `json:"profile-type"` // "bedrock" or "api"
 
 	// Bedrock-specific fields (only used when ProfileType == "bedrock")
@@ -34,7 +34,18 @@ var validCrossRegions = map[string]bool{
 	"global": true,
 }
 
-// compareVersions compares two semantic version strings
+// CompareVersions compares two semantic version strings
+// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+// Handles versions like "v0.1.0", "v0.2.0", "dev", etc.
+func CompareVersions(v1, v2 string) int {
+	// Strip "v" prefix if present
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+
+	return compareVersions(v1, v2)
+}
+
+// compareVersions compares two semantic version strings (internal, without "v" prefix)
 // Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
 // Handles versions like "0.1.0", "0.2.0", "dev", etc.
 func compareVersions(v1, v2 string) int {
@@ -250,6 +261,27 @@ func (c *Config) Save() error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// IsIncomplete checks if config is missing required fields
+func (c *Config) IsIncomplete() bool {
+	// Check profile type specific fields
+	if c.ProfileType == "bedrock" {
+		if c.Profile == "" || c.Region == "" || c.CrossRegion == "" {
+			return true
+		}
+	} else if c.ProfileType == "api" {
+		if c.BaseURL == "" || c.APIKeyID == "" {
+			return true
+		}
+	}
+
+	// Check model fields
+	if c.Model == "" || c.FastModel == "" || c.HeavyModel == "" {
+		return true
+	}
+
+	return false
 }
 
 func (c *Config) Validate() error {

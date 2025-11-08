@@ -41,7 +41,7 @@ func CheckForUpdates(currentVersion string) {
 
 	if latestVersion != currentVersion && latestVersion != "" {
 		fmt.Fprintf(os.Stderr, "\n⚠️  New version available: %s (current: %s)\n", latestVersion, currentVersion)
-		fmt.Fprintf(os.Stderr, "   Run 'clauderock update' to upgrade\n\n")
+		fmt.Fprintf(os.Stderr, "   Run 'clauderock manage update' to upgrade\n\n")
 	}
 }
 

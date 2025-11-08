@@ -14,60 +14,98 @@ type ProfileSaver interface {
 
 // Manager handles all configuration and profile migrations
 type Manager struct {
-	version string
+	cliVersion string // Current CLI version (e.g., "v0.6.1")
 }
 
 // NewManager creates a new migration manager
-func NewManager(version string) *Manager {
-	return &Manager{version: version}
+func NewManager(cliVersion string) *Manager {
+	return &Manager{cliVersion: cliVersion}
 }
 
-// ShouldRunMigrations returns true if migrations should run
-func (m *Manager) ShouldRunMigrations() bool {
-	return m.version != "dev"
+// NeedsMigration checks if config needs migration based on version comparison
+func (m *Manager) NeedsMigration(configVersion string) (bool, error) {
+	// Dev builds always skip migration
+	if m.cliVersion == "dev" {
+		return false, nil
+	}
+
+	// Empty config version with current CLI = fresh install, no migration needed
+	// Empty config version with old CLI = very old config, needs migration (but shouldn't happen)
+	if configVersion == "" {
+		return false, nil // Fresh install, no migration
+	}
+
+	// Compare versions
+	cmp := config.CompareVersions(configVersion, m.cliVersion)
+	return cmp < 0, nil // Needs migration if config version < CLI version
 }
 
-// MigrateProfile runs all profile-level migrations
-func (m *Manager) MigrateProfile(profileName string, cfg *config.Config, saver ProfileSaver) error {
-	if !m.ShouldRunMigrations() {
+// MigrateProfile runs all necessary migrations from oldVersion to current CLI version
+func (m *Manager) MigrateProfile(profileName, oldVersion string, cfg *config.Config, saver ProfileSaver) error {
+	// Dev builds skip migration
+	if m.cliVersion == "dev" {
 		return nil
 	}
 
-	// Run migrations in order
+	// Determine which migrations need to run based on version comparison
 	// v0.6.0 must run first to set ProfileType
-	if err := m.migrateToV060(profileName, cfg, saver); err != nil {
-		return fmt.Errorf("failed to migrate to v0.6.0: %w", err)
+	if m.shouldRunMigration(oldVersion, "v0.6.0") {
+		if err := m.migrateToV060(profileName, cfg, saver); err != nil {
+			return fmt.Errorf("failed to migrate to v0.6.0: %w", err)
+		}
 	}
 
 	// Skip Bedrock-specific migrations for API profiles
 	if cfg.ProfileType != "api" {
-		if err := m.migrateToV040(profileName, cfg, saver); err != nil {
-			return fmt.Errorf("failed to migrate to v0.4.0: %w", err)
+		if m.shouldRunMigration(oldVersion, "v0.4.0") {
+			if err := m.migrateToV040(profileName, cfg, saver); err != nil {
+				return fmt.Errorf("failed to migrate to v0.4.0: %w", err)
+			}
 		}
 
-		if err := m.migrateToV050(profileName, cfg, saver); err != nil {
-			return fmt.Errorf("failed to migrate to v0.5.0: %w", err)
+		if m.shouldRunMigration(oldVersion, "v0.5.0") {
+			if err := m.migrateToV050(profileName, cfg, saver); err != nil {
+				return fmt.Errorf("failed to migrate to v0.5.0: %w", err)
+			}
 		}
 	}
 
 	return nil
 }
 
-// migrateToV040 migrates model names from friendly format to full profile IDs
-func (m *Manager) migrateToV040(profileName string, cfg *config.Config, saver ProfileSaver) error {
-	// Check if models are already full profile IDs
-	modelIsFullID := aws.IsFullProfileID(cfg.Model)
-	fastModelIsFullID := aws.IsFullProfileID(cfg.FastModel)
+// shouldRunMigration determines if a migration should run based on version comparison
+// Returns true if oldVersion < targetVersion (migration is needed)
+func (m *Manager) shouldRunMigration(oldVersion, targetVersion string) bool {
+	// Empty old version means fresh install or very old config - run migration
+	if oldVersion == "" {
+		return true
+	}
 
-	// If both are already full IDs, no migration needed
+	// Check if old version is less than target version
+	return config.CompareVersions(oldVersion, targetVersion) < 0
+}
+
+// migrateToV040 migrates model names from friendly format to full profile IDs
+// Assumes migration manager has already determined this should run
+func (m *Manager) migrateToV040(profileName string, cfg *config.Config, saver ProfileSaver) error {
+	// Skip migration if models are empty (fresh install or not yet configured)
+	if cfg.Model == "" && cfg.FastModel == "" {
+		return nil
+	}
+
+	// Check if models are already full profile IDs
+	modelIsFullID := cfg.Model == "" || aws.IsFullProfileID(cfg.Model)
+	fastModelIsFullID := cfg.FastModel == "" || aws.IsFullProfileID(cfg.FastModel)
+
+	// If both are already full IDs or empty, no migration needed
 	if modelIsFullID && fastModelIsFullID {
 		return nil
 	}
 
 	fmt.Println("Upgrading config to cache model profile IDs...")
 
-	// Resolve models to full profile IDs
-	if !modelIsFullID {
+	// Resolve models to full profile IDs (skip empty ones)
+	if cfg.Model != "" && !modelIsFullID {
 		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.Model)
 		if err != nil {
 			return fmt.Errorf("failed to resolve main model: %w", err)
@@ -75,7 +113,7 @@ func (m *Manager) migrateToV040(profileName string, cfg *config.Config, saver Pr
 		cfg.Model = fullID
 	}
 
-	if !fastModelIsFullID {
+	if cfg.FastModel != "" && !fastModelIsFullID {
 		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
 		if err != nil {
 			return fmt.Errorf("failed to resolve fast model: %w", err)
@@ -93,9 +131,15 @@ func (m *Manager) migrateToV040(profileName string, cfg *config.Config, saver Pr
 }
 
 // migrateToV050 adds heavy model field if missing
+// Assumes migration manager has already determined this should run
 func (m *Manager) migrateToV050(profileName string, cfg *config.Config, saver ProfileSaver) error {
 	// If HeavyModel is already set, no migration needed
 	if cfg.HeavyModel != "" {
+		return nil
+	}
+
+	// Skip migration if main model is empty (fresh install or not yet configured)
+	if cfg.Model == "" {
 		return nil
 	}
 
@@ -114,6 +158,7 @@ func (m *Manager) migrateToV050(profileName string, cfg *config.Config, saver Pr
 }
 
 // migrateToV060 adds ProfileType field if missing
+// Assumes migration manager has already determined this should run
 func (m *Manager) migrateToV060(profileName string, cfg *config.Config, saver ProfileSaver) error {
 	// If ProfileType is already set, no migration needed
 	if cfg.ProfileType != "" {

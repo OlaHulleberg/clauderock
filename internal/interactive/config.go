@@ -158,9 +158,9 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 
 	// Branch based on profile type
 	if selectedProfileType == "bedrock" {
-		return runBedrockConfig(cfg, manager, currentProfile)
+		return runBedrockConfig(cfg, manager, currentProfile, currentVersion)
 	} else if selectedProfileType == "api" {
-		return runAPIConfig(cfg, manager, currentProfile)
+		return runAPIConfig(cfg, manager, currentProfile, currentVersion)
 	}
 
 	return fmt.Errorf("unsupported profile type: %s", selectedProfileType)
@@ -169,7 +169,7 @@ func RunInteractiveConfig(currentVersion string, mgr interface{}) error {
 // runBedrockConfig handles the Bedrock configuration flow
 func runBedrockConfig(cfg *config.Config, manager interface {
 	Save(name string, cfg *config.Config) error
-}, currentProfile string) error {
+}, currentProfile, currentVersion string) error {
 	// Variables to hold user selections
 	var (
 		selectedProfile     string
@@ -313,6 +313,11 @@ func runBedrockConfig(cfg *config.Config, manager interface {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
+	// Update version to current CLI version (but not for dev builds)
+	if currentVersion != "dev" {
+		cfg.Version = currentVersion
+	}
+
 	// Save configuration to current profile
 	if err := manager.Save(currentProfile, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
@@ -333,7 +338,7 @@ func runBedrockConfig(cfg *config.Config, manager interface {
 // runAPIConfig handles the API key configuration flow
 func runAPIConfig(cfg *config.Config, manager interface {
 	Save(name string, cfg *config.Config) error
-}, currentProfile string) error {
+}, currentProfile, currentVersion string) error {
 	// Step 1: Base URL Input
 	fmt.Println("\nEnter the base URL for your API gateway:")
 	fmt.Println("Examples: api.example.com, https://api.example.com, http://localhost:8080")
@@ -464,6 +469,11 @@ func runAPIConfig(cfg *config.Config, manager interface {
 		// Clean up keyring entry if validation fails
 		keyring.Delete(keyID)
 		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	// Update version to current CLI version (but not for dev builds)
+	if currentVersion != "dev" {
+		cfg.Version = currentVersion
 	}
 
 	// Save configuration to current profile
