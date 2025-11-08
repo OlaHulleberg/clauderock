@@ -16,17 +16,18 @@ import (
 )
 
 var (
-	clauderockProfileFlag      string
-	clauderockProfileTypeFlag  string
-	clauderockModelFlag        string
-	clauderockFastModelFlag    string
-	clauderockHeavyModelFlag   string
-	clauderockAWSProfileFlag   string
-	clauderockRegionFlag       string
-	clauderockCrossRegionFlag  string
-	clauderockBaseURLFlag      string
-	clauderockAPIKeyFlag       string
-	Version                    = "dev"
+	clauderockProfileFlag             string
+	clauderockProfileTypeFlag         string
+	clauderockModelFlag               string
+	clauderockFastModelFlag           string
+	clauderockHeavyModelFlag          string
+	clauderockAWSProfileFlag          string
+	clauderockRegionFlag              string
+	clauderockCrossRegionFlag         string
+	clauderockBaseURLFlag             string
+	clauderockAPIKeyFlag              string
+	clauderockDisableAuthSuppressFlag bool
+	Version                           = "dev"
 )
 
 var rootCmd = &cobra.Command{
@@ -53,6 +54,7 @@ func init() {
 	rootCmd.Flags().StringVar(&clauderockCrossRegionFlag, "clauderock-cross-region", "", "Override cross-region setting for this run (bedrock only)")
 	rootCmd.Flags().StringVar(&clauderockBaseURLFlag, "clauderock-base-url", "", "Override base URL for this run (api only)")
 	rootCmd.Flags().StringVar(&clauderockAPIKeyFlag, "clauderock-api-key", "", "Override API key for this run (api only, ephemeral)")
+	rootCmd.Flags().BoolVar(&clauderockDisableAuthSuppressFlag, "clauderock-disable-auth-suppress", false, "Disable automatic credential suppression during startup")
 
 	// Allow unknown flags to pass through to Claude CLI
 	rootCmd.FParseErrWhitelist.UnknownFlags = true
@@ -244,7 +246,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Launch Claude Code with passthrough args
-	return launcher.Launch(cfg, mainModelID, fastModelID, heavyModelID, currentProfile, passthroughArgs)
+	return launcher.Launch(cfg, mainModelID, fastModelID, heavyModelID, currentProfile, clauderockDisableAuthSuppressFlag, passthroughArgs)
 }
 
 // collectPassthroughArgs separates clauderock flags from Claude CLI args
@@ -267,6 +269,11 @@ func collectPassthroughArgs() []string {
 		"--clauderock-api-key":       true,
 	}
 
+	// Boolean flags (no value, don't skip next arg)
+	clauderockBoolFlags := map[string]bool{
+		"--clauderock-disable-auth-suppress": true,
+	}
+
 	skip := false
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
@@ -281,6 +288,9 @@ func collectPassthroughArgs() []string {
 			// Check if it's a flag with value (--flag=value or --flag value)
 			if strings.Contains(arg, "=") {
 				// --flag=value format, skip entirely
+				continue
+			} else if clauderockBoolFlags[arg] {
+				// Boolean flag without value, skip only this arg
 				continue
 			} else if clauderockFlags[arg] {
 				// --flag value format, skip this and next arg

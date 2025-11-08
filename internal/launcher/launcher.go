@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/OlaHulleberg/clauderock/internal/api"
@@ -14,7 +15,7 @@ import (
 )
 
 // Launch executes Claude Code with the proper environment variables (Bedrock or API)
-func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, profileName string, args []string) error {
+func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, profileName string, disableAuthSuppress bool, args []string) error {
 	// Get current working directory for session tracking
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -85,9 +86,35 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Track whether credentials were disabled for restoration later
+	var credentialsDisabled bool
+
+	// Temporarily disable credentials to suppress auth conflict warning (unless disabled by flag)
+	if !disableAuthSuppress {
+		if err := disableCredentials(); err != nil {
+			fmt.Printf("Warning: failed to disable credentials: %v\n", err)
+		} else {
+			credentialsDisabled = true
+		}
+	}
+
 	// Start Claude Code (non-blocking)
 	if err := cmd.Start(); err != nil {
+		// Restore credentials before returning error if they were disabled
+		if credentialsDisabled {
+			if restoreErr := restoreCredentials(); restoreErr != nil {
+				fmt.Printf("Warning: failed to restore credentials: %v\n", restoreErr)
+			}
+		}
 		return fmt.Errorf("failed to start claude: %w", err)
+	}
+
+	// Wait 1000ms for Claude Code to initialize, then restore credentials if they were disabled
+	if credentialsDisabled {
+		time.Sleep(1000 * time.Millisecond)
+		if err := restoreCredentials(); err != nil {
+			fmt.Printf("Warning: failed to restore credentials: %v\n", err)
+		}
 	}
 
 	// Wait for either validation to complete or Claude Code to exit
@@ -146,6 +173,50 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 		}
 		return nil
 	}
+}
+
+// getCredentialsPath returns the path to the credentials file
+func getCredentialsPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".claude", ".credentials.json"), nil
+}
+
+// disableCredentials temporarily renames the credentials file to suppress auth conflict warning
+func disableCredentials() error {
+	credPath, err := getCredentialsPath()
+	if err != nil {
+		return err
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(credPath); os.IsNotExist(err) {
+		return nil // File doesn't exist, nothing to do
+	}
+
+	// Rename to .disabled
+	disabledPath := credPath + ".disabled"
+	return os.Rename(credPath, disabledPath)
+}
+
+// restoreCredentials renames the credentials file back to its original name
+func restoreCredentials() error {
+	credPath, err := getCredentialsPath()
+	if err != nil {
+		return err
+	}
+
+	disabledPath := credPath + ".disabled"
+
+	// Check if disabled file exists
+	if _, err := os.Stat(disabledPath); os.IsNotExist(err) {
+		return nil // Disabled file doesn't exist, nothing to do
+	}
+
+	// Rename back to original
+	return os.Rename(disabledPath, credPath)
 }
 
 func trackSession(cfg *config.Config, mainModelID, fastModelID, heavyModelID, profileName, cwd string, sessionStart, sessionEnd time.Time, exitCode int) {

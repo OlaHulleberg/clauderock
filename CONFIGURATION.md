@@ -342,3 +342,35 @@ ANTHROPIC_DEFAULT_HAIKU_MODEL=<matched-fast-model-profile-id>
 AWS_PROFILE=<your-profile>
 AWS_REGION=<your-region>
 ```
+
+## Advanced Features
+
+### Automatic Credential Suppression
+
+By default, `clauderock` temporarily suppresses stored credentials during startup to prevent authentication conflict warnings. This is done by:
+
+1. Renaming `~/.claude/.credentials.json` to `~/.claude/.credentials.json.disabled` before launching
+2. Starting the process
+3. Waiting 1 second (1000ms) for initialization
+4. Restoring the file to `~/.claude/.credentials.json`
+
+This ensures a clean authentication state when using Bedrock or custom API endpoints, while preserving your normal authentication for regular use.
+
+**Why this happens:** If you've previously authenticated directly with the CLI (via `claude setup-token`), the stored credentials can conflict with the API key or Bedrock configuration that clauderock sets. The temporary suppression prevents this conflict.
+
+**Note:** Your credentials are automatically restored after 1 second, so your normal authentication remains available for other uses.
+
+### Disabling Credential Suppression
+
+If you want to disable this behavior and see authentication warnings:
+
+```bash
+clauderock --clauderock-disable-auth-suppress
+```
+
+**When you might want this:**
+- **Debugging authentication issues** - See which credentials are being used
+- **Verifying configuration** - Confirm that the correct authentication method is active
+- **Development and testing** - Troubleshoot authentication-related problems
+
+**Note:** This flag only affects the current run and is not saved to your profile. Authentication warnings will be displayed if multiple credentials are detected.
