@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/OlaHulleberg/clauderock/internal/aws"
 	"github.com/OlaHulleberg/clauderock/internal/config"
 	"github.com/OlaHulleberg/clauderock/internal/keyring"
+	"github.com/OlaHulleberg/clauderock/internal/migrations"
 )
 
 type Manager struct {
@@ -209,19 +209,10 @@ func (m *Manager) GetCurrentConfig(version string) (*config.Config, error) {
 		return nil, err
 	}
 
-	// Migrate models to v0.4.0 format if needed
-	if err := m.MigrateModelsToV040(current, cfg); err != nil {
-		return nil, fmt.Errorf("failed to migrate config: %w\nPlease run: clauderock manage config", err)
-	}
-
-	// Migrate to v0.5.0 format (add heavy model) if needed
-	if err := m.MigrateModelsToV050(current, cfg); err != nil {
-		return nil, fmt.Errorf("failed to migrate config to v0.5.0: %w\nPlease run: clauderock manage config", err)
-	}
-
-	// Migrate to v0.6.0 format (add profile type) if needed
-	if err := m.MigrateToV060(current, cfg); err != nil {
-		return nil, fmt.Errorf("failed to migrate config to v0.6.0: %w\nPlease run: clauderock manage config", err)
+	// Run all migrations through central manager
+	migMgr := migrations.NewManager(version)
+	if err := migMgr.MigrateProfile(current, cfg, m); err != nil {
+		return nil, fmt.Errorf("failed to migrate profile: %w\nPlease run: clauderock manage config", err)
 	}
 
 	return cfg, nil
@@ -360,87 +351,6 @@ func (m *Manager) MigrateFromLegacyConfig(version string) error {
 	return nil
 }
 
-// MigrateModelsToV040 migrates model names from friendly format to full profile IDs
-func (m *Manager) MigrateModelsToV040(profileName string, cfg *config.Config) error {
-	// Check if models are already full profile IDs
-	modelIsFullID := aws.IsFullProfileID(cfg.Model)
-	fastModelIsFullID := aws.IsFullProfileID(cfg.FastModel)
-
-	// If both are already full IDs, no migration needed
-	if modelIsFullID && fastModelIsFullID {
-		return nil
-	}
-
-	fmt.Println("Upgrading config to cache model profile IDs...")
-
-	// Resolve models to full profile IDs
-	if !modelIsFullID {
-		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.Model)
-		if err != nil {
-			return fmt.Errorf("failed to resolve main model: %w", err)
-		}
-		cfg.Model = fullID
-	}
-
-	if !fastModelIsFullID {
-		fullID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
-		if err != nil {
-			return fmt.Errorf("failed to resolve fast model: %w", err)
-		}
-		cfg.FastModel = fullID
-	}
-
-	// Save updated config
-	if err := m.Save(profileName, cfg); err != nil {
-		return fmt.Errorf("failed to save migrated config: %w", err)
-	}
-
-	fmt.Printf("✓ Cached model profile IDs for faster startup\n")
-	return nil
-}
-
-// MigrateModelsToV050 adds heavy model field if missing
-func (m *Manager) MigrateModelsToV050(profileName string, cfg *config.Config) error {
-	// If HeavyModel is already set, no migration needed
-	if cfg.HeavyModel != "" {
-		return nil
-	}
-
-	fmt.Println("Upgrading config to add heavy model support...")
-
-	// Set heavy model to the same as default model (user can change later)
-	cfg.HeavyModel = cfg.Model
-
-	// Save updated config
-	if err := m.Save(profileName, cfg); err != nil {
-		return fmt.Errorf("failed to save migrated config: %w", err)
-	}
-
-	fmt.Printf("✓ Added heavy model support (set to default model)\n")
-	return nil
-}
-
-// MigrateToV060 adds ProfileType field if missing
-func (m *Manager) MigrateToV060(profileName string, cfg *config.Config) error {
-	// If ProfileType is already set, no migration needed
-	if cfg.ProfileType != "" {
-		return nil
-	}
-
-	fmt.Println("Upgrading config to add profile type...")
-
-	// Default to bedrock for backward compatibility
-	cfg.ProfileType = "bedrock"
-
-	// Save updated config
-	if err := m.Save(profileName, cfg); err != nil {
-		return fmt.Errorf("failed to save migrated config: %w", err)
-	}
-
-	fmt.Printf("✓ Added profile type support (set to bedrock)\n")
-	return nil
-}
-
 // Helper functions
 
 func (m *Manager) ensureBaseDir() error {
@@ -473,22 +383,6 @@ func (m *Manager) createDefaultConfig(version string) *config.Config {
 		HeavyModel:  "anthropic.claude-opus-4-1",
 	}
 
-	// Attempt to resolve models to full profile IDs immediately
-	// If this fails, that's okay - migration will handle it later
-	mainID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.Model)
-	if err == nil {
-		cfg.Model = mainID
-	}
-
-	fastID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.FastModel)
-	if err == nil {
-		cfg.FastModel = fastID
-	}
-
-	heavyID, err := aws.ResolveModelToProfileID(cfg.Profile, cfg.Region, cfg.CrossRegion, cfg.HeavyModel)
-	if err == nil {
-		cfg.HeavyModel = heavyID
-	}
-
+	// Note: Migrations will resolve model names to full profile IDs when needed
 	return cfg
 }
