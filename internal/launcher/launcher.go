@@ -65,6 +65,9 @@ func Launch(cfg *config.Config, mainModelID, fastModelID, heavyModelID string, p
 		env = append(env,
 			fmt.Sprintf("ANTHROPIC_API_KEY=%s", apiKey),
 			fmt.Sprintf("ANTHROPIC_BASE_URL=%s", normalizedURL),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_SONNET_MODEL=%s", mainModelID),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", fastModelID),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_OPUS_MODEL=%s", heavyModelID),
 		)
 
 		// Validate models via API in background
