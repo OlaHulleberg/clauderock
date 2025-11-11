@@ -393,54 +393,94 @@ func runAPIConfig(cfg *config.Config, manager interface {
 	// Step 3: Fetch available models
 	fmt.Println("\nFetching available models from API...")
 	models, err := api.FetchAvailableModels(cfg.BaseURL, apiKey)
-	if err != nil {
-		return fmt.Errorf("failed to fetch models: %w", err)
-	}
 
-	if len(models) == 0 {
-		return fmt.Errorf("no models available from API")
-	}
+	var selectedModel, selectedFastModel, selectedHeavyModel string
 
-	// Extract model IDs for selection
-	modelIDs := make([]string, len(models))
-	for i, m := range models {
-		modelIDs[i] = m.ID
-	}
+	// Fall back to manual input if API call fails
+	if err != nil || len(models) == 0 {
+		fmt.Println("Using manual input mode")
+		fmt.Println()
 
-	// Step 4: Main model selection
-	mainModelOptions := buildAPIModelOptions(models, "main")
-	selectedModel, err := InteractiveSelect(
-		"Select Main Model",
-		"Type to filter models...",
-		mainModelOptions,
-		"",
-	)
-	if err != nil {
-		return fmt.Errorf("main model selection failed: %w", err)
-	}
+		// Main model input
+		selectedModel, err = PromptTextInput(
+			"Enter Main Model ID",
+			"",
+			"claude-sonnet-4-5",
+		)
+		if err != nil {
+			return fmt.Errorf("main model input failed: %w", err)
+		}
+		if selectedModel == "" {
+			return fmt.Errorf("main model ID cannot be empty")
+		}
 
-	// Step 5: Fast model selection
-	fastModelOptions := buildAPIModelOptions(models, "fast")
-	selectedFastModel, err := InteractiveSelect(
-		"Select Fast Model",
-		"Type to filter models...",
-		fastModelOptions,
-		"",
-	)
-	if err != nil {
-		return fmt.Errorf("fast model selection failed: %w", err)
-	}
+		// Fast model input
+		selectedFastModel, err = PromptTextInput(
+			"Enter Fast Model ID",
+			"",
+			"claude-haiku-4-5",
+		)
+		if err != nil {
+			return fmt.Errorf("fast model input failed: %w", err)
+		}
+		if selectedFastModel == "" {
+			return fmt.Errorf("fast model ID cannot be empty")
+		}
 
-	// Step 6: Heavy model selection
-	heavyModelOptions := buildAPIModelOptions(models, "heavy")
-	selectedHeavyModel, err := InteractiveSelect(
-		"Select Heavy Model",
-		"Type to filter models...",
-		heavyModelOptions,
-		"",
-	)
-	if err != nil {
-		return fmt.Errorf("heavy model selection failed: %w", err)
+		// Heavy model input
+		selectedHeavyModel, err = PromptTextInput(
+			"Enter Heavy Model ID",
+			"",
+			"claude-opus-4",
+		)
+		if err != nil {
+			return fmt.Errorf("heavy model input failed: %w", err)
+		}
+		if selectedHeavyModel == "" {
+			return fmt.Errorf("heavy model ID cannot be empty")
+		}
+	} else {
+		// Extract model IDs for selection
+		modelIDs := make([]string, len(models))
+		for i, m := range models {
+			modelIDs[i] = m.ID
+		}
+
+		// Step 4: Main model selection
+		mainModelOptions := buildAPIModelOptions(models, "main")
+		selectedModel, err = InteractiveSelect(
+			"Select Main Model",
+			"Type to filter models...",
+			mainModelOptions,
+			"",
+		)
+		if err != nil {
+			return fmt.Errorf("main model selection failed: %w", err)
+		}
+
+		// Step 5: Fast model selection
+		fastModelOptions := buildAPIModelOptions(models, "fast")
+		selectedFastModel, err = InteractiveSelect(
+			"Select Fast Model",
+			"Type to filter models...",
+			fastModelOptions,
+			"",
+		)
+		if err != nil {
+			return fmt.Errorf("fast model selection failed: %w", err)
+		}
+
+		// Step 6: Heavy model selection
+		heavyModelOptions := buildAPIModelOptions(models, "heavy")
+		selectedHeavyModel, err = InteractiveSelect(
+			"Select Heavy Model",
+			"Type to filter models...",
+			heavyModelOptions,
+			"",
+		)
+		if err != nil {
+			return fmt.Errorf("heavy model selection failed: %w", err)
+		}
 	}
 
 	// Generate keyring ID and store API key

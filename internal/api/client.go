@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+// HTTPError represents an HTTP error with status code
+type HTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("API returned status %d: %s", e.StatusCode, e.Body)
+}
+
 // ModelInfo represents a model from the API
 type ModelInfo struct {
 	ID          string   `json:"id"`
@@ -62,7 +72,10 @@ func FetchAvailableModels(baseURL, apiKey string) ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
 	}
 
 	var result ModelsResponse
@@ -78,9 +91,16 @@ func FetchAvailableModels(baseURL, apiKey string) ([]ModelInfo, error) {
 }
 
 // ValidateModels validates that the given model IDs exist in the API
+// If /v1/models returns 404 (endpoint doesn't exist), validation is skipped
 func ValidateModels(baseURL, apiKey string, modelIDs ...string) error {
 	models, err := FetchAvailableModels(baseURL, apiKey)
 	if err != nil {
+		// Check if error is a 404 - this means /v1/models endpoint doesn't exist
+		// In this case, we can't validate models, so we skip validation
+		if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == http.StatusNotFound {
+			// Silently skip validation when endpoint doesn't exist
+			return nil
+		}
 		return fmt.Errorf("failed to fetch models for validation: %w", err)
 	}
 
